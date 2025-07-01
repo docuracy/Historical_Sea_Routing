@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Sea Router</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+    <link href="https://unpkg.com/maplibre-gl@3.2.1/dist/maplibre-gl.css" rel="stylesheet"/>
+    <link href="css/styles.css" rel="stylesheet"/>
+    <script src="https://unpkg.com/maplibre-gl@3.2.1/dist/maplibre-gl.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fflate@0.7.4/umd/index.min.js"></script>
+    <script src="https://github.com/graphology/graphology/releases/download/0.26.0/graphology.min.js"></script>
+    <script src="https://github.com/graphology/graphology/releases/download/0.26.0/graphology-library.min.js"></script>
+    <script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.umd.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.16.1/proj4.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tweakpane@3.1.4/dist/tweakpane.min.js"></script>
+</head>
+<body>
+<div id="map"></div>
+<div id="pane-container" style="position: absolute; top: 10px; left: 10px; z-index: 1000;"></div>
+<script src="js/router.js"></script>
+<script src="js/sailing.js"></script>
+<script src="js/sailing_vessels.js"></script>
+<script src="js/sailing_deck.js"></script>
+</body>
+</html>
