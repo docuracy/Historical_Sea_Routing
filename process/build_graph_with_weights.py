@@ -7,6 +7,7 @@ import random
 import sqlite3
 from collections import defaultdict
 from pathlib import Path
+from typing import Tuple
 
 import geopandas as gpd
 import h3
@@ -15,14 +16,13 @@ import pandas as pd
 from fiona import listlayers
 from tqdm import tqdm
 
-from process.config import AOIS, datasets
-from process.sea_graph_v3 import COASTAL_SEA_RESOLUTION
+from process.config import AOIS, COASTAL_SEA_RESOLUTION, datasets
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-AOI = AOIS[1]
+AOI = AOIS[0]
 DRAUGHT_THRESHOLD = 4.0  # Vessel draught in metres
 DARKNESS_PENALTY = 3.0  # Penalty multiplier for darkness
 LAND_INVISIBILITY_MULTIPLIER = 3.0  # Penalty multiplier for land visibility
@@ -41,34 +41,34 @@ copernicus_parquet = geo_output_directory / "copernicus.parquet"
 node_env_db = geo_output_directory / "node_env.sqlite3"
 
 
-# def visibility_penalty(h2: dict, e2: dict) -> float:
-#     h2_daylight_ratio = float(h2["daylight_ratio"] or 0.0)
-#     darkness_factor = DARKNESS_PENALTY * (1.0 - h2_daylight_ratio)
-#
-#     h2_clear_land = float(h2["clear_land"] or 0.0)
-#     e2_visibility_m = float(e2["visibility_m"] or 0.0)
-#
-#     if h2_clear_land == 0.0 or h2_clear_land > e2_visibility_m:
-#         return darkness_factor * LAND_INVISIBILITY_MULTIPLIER
-#
-#     return darkness_factor
+def visibility_penalty(h2: dict, e2: dict) -> float:
+    h2_daylight_ratio = float(h2["daylight_ratio"] or 0.0)
+    darkness_factor = DARKNESS_PENALTY * (1.0 - h2_daylight_ratio)
+
+    h2_clear_land = float(h2["clear_land"] or 0.0)
+    e2_visibility_m = float(e2["visibility_m"] or 0.0)
+
+    if h2_clear_land == 0.0 or h2_clear_land > e2_visibility_m:
+        return darkness_factor * LAND_INVISIBILITY_MULTIPLIER
+
+    return darkness_factor
 
 
-# def directional_penalty(dx: float, dy: float, vector: Tuple[float, float]) -> float:
-#     """Vector alignment penalty; lower is better."""
-#     vx, vy = vector
-#
-#     if vx is None or vy is None:
-#         # If missing vector components, no penalty (neutral)
-#         return 1.0
-#
-#     dot = dx * vx + dy * vy
-#     norm_vec = np.hypot(vx, vy)
-#     norm_dir = np.hypot(dx, dy)
-#     if norm_vec == 0 or norm_dir == 0:
-#         return 1.0
-#     angle = np.arccos(np.clip(dot / (norm_vec * norm_dir), -1.0, 1.0))
-#     return 1.0 + (angle / np.pi)  # 1 (aligned) to 2 (opposite)
+def directional_penalty(dx: float, dy: float, vector: Tuple[float, float]) -> float:
+    """Vector alignment penalty; lower is better."""
+    vx, vy = vector
+
+    if vx is None or vy is None:
+        # If missing vector components, no penalty (neutral)
+        return 1.0
+
+    dot = dx * vx + dy * vy
+    norm_vec = np.hypot(vx, vy)
+    norm_dir = np.hypot(dx, dy)
+    if norm_vec == 0 or norm_dir == 0:
+        return 1.0
+    angle = np.arccos(np.clip(dot / (norm_vec * norm_dir), -1.0, 1.0))
+    return 1.0 + (angle / np.pi)  # 1 (aligned) to 2 (opposite)
 
 
 def load_all_edge_layers() -> gpd.GeoDataFrame:
@@ -209,15 +209,15 @@ def init_db() -> sqlite3.Connection:
     ''')
 
     # Create edge costs table if not exists
-    # c.execute('''
-    #     CREATE TABLE IF NOT EXISTS edge_costs (
-    #     source TEXT NOT NULL,
-    #     target TEXT NOT NULL,
-    #     month INTEGER NOT NULL,
-    #     weight REAL NOT NULL,
-    #     PRIMARY KEY (source, target, month)
-    # )
-    # ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS edge_costs (
+        source TEXT NOT NULL,
+        target TEXT NOT NULL,
+        month INTEGER NOT NULL,
+        weight REAL NOT NULL,
+        PRIMARY KEY (source, target, month)
+    )
+    ''')
 
     conn.commit()
     return conn, c
@@ -270,30 +270,30 @@ def log_random_edge_sample(conn: sqlite3.Connection, cursor: sqlite3.Cursor):
             logger.warning(f"No monthly data for {h3_id} in month {random_month}")
 
     # Log the computed edge cost for this edge and month if it exists
-    # cursor.execute("""
-    #     SELECT * FROM edge_costs WHERE source = ? AND target = ? AND month = ?
-    # """, (source, target, random_month))
-    # edge_cost_row = cursor.fetchone()
-    # if edge_cost_row:
-    #     colnames = [desc[0] for desc in cursor.description]
-    #     edge_cost_dict = dict(zip(colnames, edge_cost_row))
-    #     logger.info(
-    #         f"Edge cost data for {source} → {target} in month {random_month}:\n{pprint.pformat(edge_cost_dict)}")
-    # else:
-    #     logger.warning(f"No edge cost found for {source} → {target} in month {random_month}")
+    cursor.execute("""
+        SELECT * FROM edge_costs WHERE source = ? AND target = ? AND month = ?
+    """, (source, target, random_month))
+    edge_cost_row = cursor.fetchone()
+    if edge_cost_row:
+        colnames = [desc[0] for desc in cursor.description]
+        edge_cost_dict = dict(zip(colnames, edge_cost_row))
+        logger.info(
+            f"Edge cost data for {source} → {target} in month {random_month}:\n{pprint.pformat(edge_cost_dict)}")
+    else:
+        logger.warning(f"No edge cost found for {source} → {target} in month {random_month}")
 
     # Log the computed edge cost for this edge REVERSED and month if it exists
-    # cursor.execute("""
-    #     SELECT * FROM edge_costs WHERE source = ? AND target = ? AND month = ?
-    # """, (target, source, random_month))
-    # edge_cost_row = cursor.fetchone()
-    # if edge_cost_row:
-    #     colnames = [desc[0] for desc in cursor.description]
-    #     edge_cost_dict = dict(zip(colnames, edge_cost_row))
-    #     logger.info(
-    #         f"Edge cost data for {source} → {target} in month {random_month}:\n{pprint.pformat(edge_cost_dict)}")
-    # else:
-    #     logger.warning(f"No edge cost found for {source} → {target} in month {random_month}")
+    cursor.execute("""
+        SELECT * FROM edge_costs WHERE source = ? AND target = ? AND month = ?
+    """, (target, source, random_month))
+    edge_cost_row = cursor.fetchone()
+    if edge_cost_row:
+        colnames = [desc[0] for desc in cursor.description]
+        edge_cost_dict = dict(zip(colnames, edge_cost_row))
+        logger.info(
+            f"Edge cost data for {source} → {target} in month {random_month}:\n{pprint.pformat(edge_cost_dict)}")
+    else:
+        logger.warning(f"No edge cost found for {source} → {target} in month {random_month}")
 
 
 def save_edges_to_db(conn: sqlite3.Connection, cursor: sqlite3.Cursor, edges_df: pd.DataFrame):
@@ -451,72 +451,72 @@ def load_node_env(conn: sqlite3.Connection, cursor: sqlite3.Cursor, batch_size: 
     log_random_edge_sample(conn, cursor)
 
 
-# def compute_and_store_edge_costs(conn: sqlite3.Connection, cursor: sqlite3.Cursor, batch_size: int = 1000):
-#     logger.info("Clearing existing edge costs...")
-#     cursor.execute("DELETE FROM edge_costs")
-#     conn.commit()
-#
-#     logger.info("Computing edge costs...")
-#     cursor.execute("SELECT source, target, length_m, dx, dy FROM edges")
-#     rows = cursor.fetchall()
-#
-#     batch = []
-#     for i, (source, target, length_m, dx, dy) in enumerate(tqdm(rows, desc="Computing edge costs")):
-#
-#         # Load static node data for source and target
-#         cursor.execute("SELECT * FROM nodes WHERE h3_id = ?", (source,))
-#         static_source = cursor.fetchone()
-#         cursor.execute("SELECT * FROM nodes WHERE h3_id = ?", (target,))
-#         static_target = cursor.fetchone()
-#
-#         if not static_source or not static_target:
-#             logger.warning(f"Missing static data for edge {source} → {target}, skipping.")
-#             continue
-#
-#         # Load env data for source and target
-#         cursor.execute("SELECT * FROM node_env WHERE h3_id = ?", (source,))
-#         env_source = {row["month"]: row for row in cursor.fetchall()}
-#         cursor.execute("SELECT * FROM node_env WHERE h3_id = ?", (target,))
-#         env_target = {row["month"]: row for row in cursor.fetchall()}
-#
-#         common_months = set(env_source) & set(env_target)
-#         if not common_months:
-#             continue
-#
-#         for (h1, h2, env2, d_sign) in [
-#             (static_source, static_target, env_target, 1),
-#             (static_target, static_source, env_source, -1),
-#         ]:
-#             dx_signed, dy_signed = dx * d_sign, dy * d_sign
-#
-#             for month in common_months:
-#                 e2 = env2[month]
-#
-#                 cost = length_m \
-#                        * directional_penalty(dx_signed, dy_signed,
-#                                              (e2["current_x"], e2["current_y"])) ** CURRENT_PENALTY \
-#                        * directional_penalty(dx_signed, dy_signed, (e2["wind_x"], e2["wind_y"])) ** WIND_PENALTY \
-#                        * directional_penalty(dx_signed, dy_signed, (e2["wave_x"], e2["wave_y"])) ** WAVE_PENALTY \
-#                        * visibility_penalty(h2, e2)
-#
-#                 batch.append((h1["h3_id"], h2["h3_id"], month, cost))
-#
-#         if len(batch) >= batch_size:
-#             cursor.executemany("""
-#                 INSERT OR REPLACE INTO edge_costs (source, target, month, weight)
-#                 VALUES (?, ?, ?, ?)
-#             """, batch)
-#             conn.commit()
-#             batch.clear()
-#
-#     if batch:
-#         cursor.executemany("""
-#             INSERT OR REPLACE INTO edge_costs (source, target, month, weight)
-#             VALUES (?, ?, ?, ?)
-#         """, batch)
-#         conn.commit()
-#
-#     logger.info("✔ Completed storing edge costs.")
+def compute_and_store_edge_costs(conn: sqlite3.Connection, cursor: sqlite3.Cursor, batch_size: int = 1000):
+    logger.info("Clearing existing edge costs...")
+    cursor.execute("DELETE FROM edge_costs")
+    conn.commit()
+
+    logger.info("Computing edge costs...")
+    cursor.execute("SELECT source, target, length_m, dx, dy FROM edges")
+    rows = cursor.fetchall()
+
+    batch = []
+    for i, (source, target, length_m, dx, dy) in enumerate(tqdm(rows, desc="Computing edge costs")):
+
+        # Load static node data for source and target
+        cursor.execute("SELECT * FROM nodes WHERE h3_id = ?", (source,))
+        static_source = cursor.fetchone()
+        cursor.execute("SELECT * FROM nodes WHERE h3_id = ?", (target,))
+        static_target = cursor.fetchone()
+
+        if not static_source or not static_target:
+            logger.warning(f"Missing static data for edge {source} → {target}, skipping.")
+            continue
+
+        # Load env data for source and target
+        cursor.execute("SELECT * FROM node_env WHERE h3_id = ?", (source,))
+        env_source = {row["month"]: row for row in cursor.fetchall()}
+        cursor.execute("SELECT * FROM node_env WHERE h3_id = ?", (target,))
+        env_target = {row["month"]: row for row in cursor.fetchall()}
+
+        common_months = set(env_source) & set(env_target)
+        if not common_months:
+            continue
+
+        for (h1, h2, env2, d_sign) in [
+            (static_source, static_target, env_target, 1),
+            (static_target, static_source, env_source, -1),
+        ]:
+            dx_signed, dy_signed = dx * d_sign, dy * d_sign
+
+            for month in common_months:
+                e2 = env2[month]
+
+                cost = length_m \
+                       * directional_penalty(dx_signed, dy_signed,
+                                             (e2["current_x"], e2["current_y"])) ** CURRENT_PENALTY \
+                       * directional_penalty(dx_signed, dy_signed, (e2["wind_x"], e2["wind_y"])) ** WIND_PENALTY \
+                       * directional_penalty(dx_signed, dy_signed, (e2["wave_x"], e2["wave_y"])) ** WAVE_PENALTY \
+                       * visibility_penalty(h2, e2)
+
+                batch.append((h1["h3_id"], h2["h3_id"], month, cost))
+
+        if len(batch) >= batch_size:
+            cursor.executemany("""
+                INSERT OR REPLACE INTO edge_costs (source, target, month, weight)
+                VALUES (?, ?, ?, ?)
+            """, batch)
+            conn.commit()
+            batch.clear()
+
+    if batch:
+        cursor.executemany("""
+            INSERT OR REPLACE INTO edge_costs (source, target, month, weight)
+            VALUES (?, ?, ?, ?)
+        """, batch)
+        conn.commit()
+
+    logger.info("✔ Completed storing edge costs.")
 
 
 def clean_number(x):
@@ -597,18 +597,22 @@ def iter_edges_keyset(cursor, batch_size=1000):
     while True:
         if last_source is None:
             cursor.execute(f"""
-                SELECT source, target, length_m, dx, dy
-                FROM edges
-                ORDER BY source, target
+                SELECT ec.source, ec.target, ec.month, ec.weight,
+                       e.length_m, e.dx, e.dy
+                FROM edge_costs ec
+                JOIN edges e ON (e.source = ec.source AND e.target = ec.target) OR (e.source = ec.target AND e.target = ec.source)
+                ORDER BY ec.source, ec.target
                 LIMIT {batch_size}
             """)
         else:
             cursor.execute(f"""
-                SELECT source, target, length_m, dx, dy
-                FROM edges
-                WHERE (source > ?)
-                   OR (source = ? AND target > ?)
-                ORDER BY source, target
+                SELECT ec.source, ec.target, ec.month, ec.weight,
+                       e.length_m, e.dx, e.dy
+                FROM edge_costs ec
+                JOIN edges e ON (e.source = ec.source AND e.target = ec.target) OR (e.source = ec.target AND e.target = ec.source)
+                WHERE (ec.source > ?)
+                   OR (ec.source = ? AND ec.target > ?)
+                ORDER BY ec.source, ec.target
                 LIMIT {batch_size}
             """, (last_source, last_source, last_target))
 
@@ -616,63 +620,20 @@ def iter_edges_keyset(cursor, batch_size=1000):
         if not batch:
             break
 
-        for source, target, length_m, dx, dy in batch:
-            yield {
-                "source": source,
-                "target": target,
-                "attributes": {
-                    "length_m": clean_number(length_m),
-                    "dx": clean_number(dx),
-                    "dy": clean_number(dy),
-                }
-            }
+        # Group by (source, target)
+        grouped = defaultdict(lambda: {"w": [None] * 12})
+        for source, target, month, weight, length_m, dx, dy in batch:
+            key = (source, target)
+            g = grouped[key]
+            g["length_m"] = clean_number(length_m)
+            g["dx"] = clean_number(dx)
+            g["dy"] = clean_number(dy)
+            g["w"][month - 1] = clean_number(weight)
+
+        # Yield edges grouped by (source,target)
+        for (source, target), attrs in grouped.items():
+            yield {"source": source, "target": target, "attributes": attrs}
             last_source, last_target = source, target
-
-
-# def iter_edges_keyset(cursor, batch_size=1000):
-#     last_source = None
-#     last_target = None
-#
-#     while True:
-#         if last_source is None:
-#             cursor.execute(f"""
-#                 SELECT ec.source, ec.target, ec.month, ec.weight,
-#                        e.length_m, e.dx, e.dy
-#                 FROM edge_costs ec
-#                 JOIN edges e ON (e.source = ec.source AND e.target = ec.target) OR (e.source = ec.target AND e.target = ec.source)
-#                 ORDER BY ec.source, ec.target
-#                 LIMIT {batch_size}
-#             """)
-#         else:
-#             cursor.execute(f"""
-#                 SELECT ec.source, ec.target, ec.month, ec.weight,
-#                        e.length_m, e.dx, e.dy
-#                 FROM edge_costs ec
-#                 JOIN edges e ON (e.source = ec.source AND e.target = ec.target) OR (e.source = ec.target AND e.target = ec.source)
-#                 WHERE (ec.source > ?)
-#                    OR (ec.source = ? AND ec.target > ?)
-#                 ORDER BY ec.source, ec.target
-#                 LIMIT {batch_size}
-#             """, (last_source, last_source, last_target))
-#
-#         batch = cursor.fetchall()
-#         if not batch:
-#             break
-#
-#         # Group by (source, target)
-#         grouped = defaultdict(lambda: {"w": [None] * 12})
-#         for source, target, month, weight, length_m, dx, dy in batch:
-#             key = (source, target)
-#             g = grouped[key]
-#             g["length_m"] = clean_number(length_m)
-#             g["dx"] = clean_number(dx)
-#             g["dy"] = clean_number(dy)
-#             g["w"][month - 1] = clean_number(weight)
-#
-#         # Yield edges grouped by (source,target)
-#         for (source, target), attrs in grouped.items():
-#             yield {"source": source, "target": target, "attributes": attrs}
-#             last_source, last_target = source, target
 
 
 def build_and_export_graphs_from_db(cursor, batch_size=1000):
@@ -690,8 +651,7 @@ def build_and_export_graphs_from_db(cursor, batch_size=1000):
         # Write nodes with progress bar and total
         f.write('"nodes": [\n')
         first = True
-        for node in tqdm(iter_nodes_keyset(cursor, batch_size), desc="Exporting nodes", unit="nodes",
-                         total=total_nodes):
+        for node in tqdm(iter_nodes_keyset(cursor, batch_size), desc="Exporting nodes", unit="nodes", total=total_nodes):
             if not first:
                 f.write(",\n")
             else:
@@ -707,8 +667,7 @@ def build_and_export_graphs_from_db(cursor, batch_size=1000):
         # Write edges with progress bar and total
         f.write('"edges": [\n')
         first = True
-        for edge in tqdm(iter_edges_keyset(cursor, batch_size), desc="Exporting edges", unit="edges",
-                         total=total_edges):
+        for edge in tqdm(iter_edges_keyset(cursor, batch_size), desc="Exporting edges", unit="edges", total=total_edges):
             if not first:
                 f.write(",\n")
             else:
@@ -786,19 +745,19 @@ def save_metadata():
 
 
 def main():
-    if node_env_db.exists():
-        conn, cursor = init_db()
-        log_random_edge_sample(conn, cursor)
-    else:
-        conn, cursor = init_db()
-        load_node_env(conn, cursor)
-
+    # if node_env_db.exists():
+    #     conn, cursor = init_db()
+    #     log_random_edge_sample(conn, cursor)
+    # else:
+    #     conn, cursor = init_db()
+    #     load_node_env(conn, cursor)
+    #
     # compute_and_store_edge_costs(conn, cursor)
-    build_and_export_graphs_from_db(cursor)
-
-    conn.close()
-
-    logger.info("✅ All graphs built and exported.")
+    # build_and_export_graphs_from_db(cursor)
+    #
+    # conn.close()
+    #
+    # logger.info("✅ All graphs built and exported.")
 
     save_metadata()
 

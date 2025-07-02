@@ -8,6 +8,7 @@ let playInput;
 let returnInput;
 let instructions;
 let routeLegFolders = {};
+let geoJsonButton;
 
 function initDeck() {
 
@@ -87,16 +88,23 @@ function initDeck() {
 
         if (!preset) return;
 
+        isProgrammaticChange = true;  // START suppressing recomputes
+
         // Update vesselParameters with new preset values
         Object.keys(preset).forEach((key) => {
             vesselParameters[key] = preset[key];
             // Update the corresponding input control in the pane
             if (numericInputs[key]) {
                 numericInputs[key].value = preset[key];
+                numericInputs[key].refresh(); // ensure UI updates visually
             }
         });
+
         pane.refresh();
-        reComputeRouteIfReady();
+
+        isProgrammaticChange = false; // STOP suppressing recomputes
+
+        reComputeRouteIfReady(); // run once after all updates
     });
 
     monthInput.on("change", () => {
@@ -128,13 +136,32 @@ function initDeck() {
 
     Object.values(numericInputs).forEach(input => {
         input.on('change', () => {
-            reComputeRouteIfReady();
+            if (!isProgrammaticChange) {
+                reComputeRouteIfReady();
+            }
         });
     });
+
+    const year = new Date().getFullYear();
+    const $credit = $(`
+      <span id="credit">
+        © ${year} Stephen Gadd | 
+        <a href="https://github.com/docuracy/Historical_Sea_Routing" target="_blank" rel="noopener noreferrer">
+          About
+        </a> 
+      </span>
+    `);
+    $('#pane-container').append($credit);
 
 }
 
 function updateRouteLegLogs(legTitle = false, logs = false, colour = 'black') {
+    // Remove the GeoJSON button if it exists
+    if (geoJsonButton) {
+        pane.remove(geoJsonButton);
+        geoJsonButton = null;
+    }
+
     // Remove all existing route leg folders if legTitle is not provided
     if (!legTitle) {
         Object.values(routeLegFolders).forEach(folder => {
@@ -162,7 +189,6 @@ function updateRouteLegLogs(legTitle = false, logs = false, colour = 'black') {
     });
 
     const $titleEl = $(folder.element).find('.tp-fldv_t');
-    console.log("$swatch", $titleEl, colour);
     if ($titleEl.length) {
         const $swatch = $('<span>').css({
             display: 'inline-block',
@@ -186,7 +212,6 @@ function updateRouteLegLogs(legTitle = false, logs = false, colour = 'black') {
 }
 
 function startMonthCycle() {
-    console.debug(monthInput, monthCycleInterval, isProgrammaticChange);
     if (monthCycleInterval) return;
 
     currentMonth = monthInput.value || 1; // Default to January if not set
@@ -197,7 +222,7 @@ function startMonthCycle() {
         vesselParameters.month = currentMonth;
         monthInput.value = currentMonth;
         monthInput.refresh();
-    }, 2000);
+    }, 5000);
 }
 
 function stopMonthCycle() {

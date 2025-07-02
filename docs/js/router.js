@@ -1,11 +1,14 @@
+let aoi;
+
 let map;
 let graph;
-let H3_RESOLUTION; // To store the resolution of H3 cells in our graph
+let metadata;
+let H3_RESOLUTION; // To store the maximum resolution of H3 cells in the graph
 
 // Variables for click-based point selection
 let startPointH3 = null;
 let endPointH3 = null;
-let selectingStart = true; // True if selecting start, false for end
+let selectingStart = true;
 
 // MapLibre markers
 let startMarker = null;
@@ -13,8 +16,9 @@ let endMarker = null;
 
 let monthCycleInterval = null;
 
-let routeColours = ['orange', 'pink']
+let routeColours = ['orange', 'pink'];
 let routeBounds = new maplibregl.LngLatBounds();
+let routeLogs;
 
 function h3ToLngLat(h3Index) {
     const [lat, lng] = h3.cellToLatLng(h3Index);
@@ -181,6 +185,15 @@ function clearPointMarkers() {
     }
 }
 
+function showToast(message, duration = 3000) {
+  const $toast = $('<div class="toast-message"></div>').text(message);
+  $('body').append($toast);
+  $toast.fadeIn(400);
+  setTimeout(() => {
+    $toast.fadeOut(400, () => $toast.remove());
+  }, duration);
+}
+
 // --- Find Closest Graph Node ---
 function findClosestGraphNode(clickedLngLat, graph, h3Resolution) {
     const [clickedLng, clickedLat] = clickedLngLat;
@@ -301,13 +314,15 @@ function computeOneWayRoute(source, target, month, colour) {
             return temporalWeight * draughtMultiplier;
         };
 
-        const path = graphologyLibrary.shortestPath.dijkstra.bidirectional(graph, source, target, weightFn);
+        let path;
+        try {
+            path = graphologyLibrary.shortestPath.dijkstra.bidirectional(graph, source, target, weightFn);
+        } catch (error) {
+            throw new Error(`Failed to compute path from ${source} to ${target}: ${error.message}`);
+        }
 
         if (!path || path.length === 0) {
-            console.warn(`No path found between ${source} and ${target}.`);
-            clearRoute();
-            alert("No path found between the selected points.");
-            return null;
+            throw new Error(`No path found between ${source} and ${target}.`);
         }
 
         drawRoute(path, colour);
@@ -315,10 +330,10 @@ function computeOneWayRoute(source, target, month, colour) {
         return logPathAttributes(graph, path, month - 1);
 
     } catch (error) {
-        console.error("Error computing one-way route:", error);
+        showToast(error.message);
         clearRoute();
-        alert("An error occurred while computing the route. Check console for details.");
-        return null;
+        clearPointMarkers();
+        return false;
     }
 }
 
@@ -343,12 +358,36 @@ function computeRoutes() {
     month = vesselParameters.month;
     draughtWithTolerance = vesselParameters.vesselDraughtWithTolerance;
 
-    updateRouteLegLogs('Outward Log', computeOneWayRoute(startPointH3, endPointH3, month, routeColours[0]), routeColours[0]);
+    routeLogs = []
+
+    // Add result to routeLogs
+    routeLogs.push(computeOneWayRoute(startPointH3, endPointH3, month, routeColours[0]));
+    updateRouteLegLogs('Outward Log', routeLogs[0], routeColours[0]);
     if (vesselParameters.return) {
-        updateRouteLegLogs('Return Log', computeOneWayRoute(endPointH3, startPointH3, month, routeColours[1]), routeColours[1]);
+        routeLogs.push(computeOneWayRoute(endPointH3, startPointH3, month, routeColours[1]));
+        updateRouteLegLogs('Return Log', routeLogs[1], routeColours[1]);
     } else {
         updateRouteLegLogs('Return Log', false);
     }
+
+    // Exit early if no logs were generated
+    if (routeLogs.every(log => !log)) {
+        return;
+    }
+
+    // Add a horizontal line after the folder and a GeoJSON Download button
+    pane.addSeparator();
+    geoJsonButton = pane.addButton({title: 'Download GeoJSON'});
+    const $icon = $('<span>').html(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" 
+             width="14" height="14" style="margin-right:-6px; vertical-align:middle;">
+            <path d="M5 20h14v-2H5v2zm7-18v12l4-4h-3V4h-2v6H8l4 4V2z" fill="currentColor"/>
+        </svg>
+    `);
+    $(geoJsonButton.element)
+        .attr('title', 'Includes all parameters, data source references, and route logs too!')
+        .find('.tp-btnv_t').prepend($icon);
+    geoJsonButton.on('click', downloadGeoJson);
 
     map.fitBounds(routeBounds, {
         padding: {top: 20, bottom: 20, left: pane.element.offsetWidth, right: 20},
@@ -358,13 +397,85 @@ function computeRoutes() {
     console.log(`Total Route Computation took: ${(performance.now() - computeStartTime).toFixed(2)} ms`);
 }
 
+function downloadGeoJson() {
+    stopMonthCycle(); // Stop any ongoing month cycle to ensure we package the current state
+    const features = [];
+
+    routeColours.forEach((colour, idx) => {
+        const isReturn = (idx === 1 && vesselParameters.return);
+        const originH3 = isReturn ? endPointH3 : startPointH3;
+        const destinationH3 = isReturn ? startPointH3 : endPointH3;
+        const direction = isReturn ? 'return' : 'outward';
+
+        const originalSource = map.getSource(`original-route-${colour}`);
+        const processedSource = map.getSource(`processed-route-${colour}`);
+
+        if (originalSource && originalSource._data) {
+            features.push({
+                type: 'Feature',
+                properties: {
+                    type: 'h3 hex centres',
+                    origin: originH3,
+                    destination: destinationH3,
+                    direction
+                },
+                geometry: originalSource._data.geometry
+            });
+        }
+
+        if (processedSource && processedSource._data) {
+            features.push({
+                type: 'Feature',
+                properties: {
+                    type: 'spline curve',
+                    origin: originH3,
+                    destination: destinationH3,
+                    direction
+                },
+                geometry: processedSource._data.geometry
+            });
+        }
+    });
+
+    const geojson = {
+        type: 'FeatureCollection',
+        properties: {
+            metadata: structuredClone(metadata),
+            vesselParameters: structuredClone(vesselParameters),
+            routeLogs: structuredClone(routeLogs),
+        },
+        features
+    };
+
+    const blob = new Blob([JSON.stringify(geojson)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `route_${startPointH3}_${endPointH3}.geojson`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
 
 $(async () => {
     map = new maplibregl.Map({
         container: 'map',
         style: 'https://tiles.whgazetteer.org/styles/whg-basic-light/style.json',
-        center: [-1.5, 52],
         zoom: 6,
+    });
+
+    map.on('style.load', async () => {
+        await loadMetadata();
+        await loadAOIGraph();
+        if (!(graph && Object.keys(graph).length > 0)) {
+            console.error("Graph failed to load or is empty.");
+            $('#button').prop('disabled', true).text('Graph Load Failed');
+            return; // Stop execution if graph is not loaded
+        }
+        map.setProjection({type: 'globe'});
+        $('#map').addClass('visible');
     });
 
     // Add map navigation controls
@@ -372,32 +483,27 @@ $(async () => {
 
     initDeck();
 
-    graph = await loadAOIGraph();
-    if (graph && Object.keys(graph).length > 0) {
-        H3_RESOLUTION = 7;
-        console.log('Graph loaded and H3 Resolution inferred:', H3_RESOLUTION);
-    } else {
-        console.error("Graph failed to load or is empty.");
-        $('#button').prop('disabled', true).text('Graph Load Failed');
-        return; // Stop execution if graph is not loaded
-    }
-
     // --- Map Click Listener for Point Selection ---
     map.on('click', async (e) => {
         if (!graph) return; // Ensure graph is loaded
 
-
         const clickedLngLat = [e.lngLat.lng, e.lngLat.lat];
+
+        // Check if the clicked point is within the AOI bounds
+        const {west, south, east, north} = metadata.bounds;
+        if (clickedLngLat[0] < west || clickedLngLat[0] > east || clickedLngLat[1] < south || clickedLngLat[1] > north) {
+            showToast("Please pick a point within the AOI bounds.");
+            return;
+        }
+
         const closestNodeH3 = findClosestGraphNode(clickedLngLat, graph, H3_RESOLUTION);
 
         if (!closestNodeH3) {
-            console.warn("Could not find a closest graph node for the clicked location.");
-            alert("No nearby graph node found. Please click closer to a known route.");
+            showToast("Please pick a point nearer to the coast.");
             return;
         }
 
         const closestNodeLngLat = h3ToLngLat(closestNodeH3); // Convert back to LngLat for marker
-        console.log("Closest graph node selected:", closestNodeH3, "at coordinates:", closestNodeLngLat);
 
         if (selectingStart) {
             stopMonthCycle();
@@ -425,15 +531,71 @@ async function reComputeRouteIfReady() {
     }
 }
 
-async function loadAOIGraph(aoi = "UK-Eire") {
+async function loadAOIGraph() {
     const res = await fetch(`data/${aoi}/routing_graph.json.gz`);
     const compressedData = new Uint8Array(await res.arrayBuffer());
     const decompressedData = fflate.decompressSync(compressedData);
     const jsonText = new TextDecoder("utf-8").decode(decompressedData);
     const json = JSON.parse(jsonText);
 
-    let graph = graphology.Graph.from(json);
+    graph = graphology.Graph.from(json);
 
     console.info(`Loaded AOI graph for ${aoi} with ${graph.order} nodes and ${graph.size} edges.`);
-    return graph;
+}
+
+async function loadMetadata(defaultAOI = "Europe") {
+    const params = new URLSearchParams(window.location.search);
+    aoi = params.get("aoi") || defaultAOI;
+    let res;
+
+    try {
+        res = await fetch(`data/${aoi}/metadata.json`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+        console.warn(`Failed to load metadata for "${aoi}", falling back to "${defaultAOI}".`);
+        aoi = defaultAOI;
+        res = await fetch(`data/${aoi}/metadata.json`);
+    }
+
+    metadata = await res.json();
+
+    H3_RESOLUTION = metadata.h3_resolution;
+
+    const {west, south, east, north} = metadata.bounds;
+
+    map.fitBounds([[west, south], [east, north]], {
+        padding: {top: 20, bottom: 20, left: pane.element.offsetWidth, right: 20},
+        duration: 3000
+    });
+
+    // Draw AOI bounds on the map
+    const boundsGeojson = {
+        type: 'Feature',
+        geometry: {
+            type: 'Polygon',
+            coordinates: [[
+                [west, south],
+                [east, south],
+                [east, north],
+                [west, north],
+                [west, south]
+            ]]
+        }
+    };
+
+    if (map.getSource('aoi-bounds')) {
+        map.getSource('aoi-bounds').setData(boundsGeojson);
+    } else {
+        map.addSource('aoi-bounds', {type: 'geojson', data: boundsGeojson});
+        map.addLayer({
+            id: 'aoi-bounds-layer',
+            type: 'line',
+            source: 'aoi-bounds',
+            paint: {
+                'line-color': '#FF000055',
+                'line-width': 2,
+                'line-dasharray': [2, 2]
+            }
+        });
+    }
 }

@@ -19,6 +19,9 @@ AOIS = [
     },
 ]
 
+# Define H3 resolution for land-adjacent zones
+COASTAL_SEA_RESOLUTION = 7
+
 # Define datasets
 datasets = {
     "Bathymetry": {
@@ -73,13 +76,22 @@ datasets = {
             "total_ssrd": "surface_solar_radiation_downwards",
         }
     },
+    "DEM": {
+        "description": "Digital Elevation Model (DEM) tiles in Terrarium format from Mapzen AWS S3 bucket.",
+        "zoom_level": 12,
+        "source_url_template": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+    }
 }
+
 
 # Add label and variable name lists
 def enrich_datasets(dsets):
-    for ds_info in dsets.values():
+    for name, ds_info in dsets.items():
+        if name == "DEM":
+            continue  # Skip enrichment for DEM
         ds_info["all_labels"] = list(ds_info.get("variables", {}).keys())
         ds_info["nc_variables"] = list(ds_info.get("variables", {}).values())
     return dsets
+
 
 datasets = enrich_datasets(datasets)
