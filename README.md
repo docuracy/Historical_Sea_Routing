@@ -73,12 +73,15 @@ without recourse to ray-casting.
 Modern meteorological data from the [Copernicus Climate Data Store](https://cds.climate.copernicus.eu/) are used to
 estimate historical attenuation of visibility due to fog and rain.
 
+![Screenshot 3: Viabundus Water](/screenshots/viabundus_water.png)
+
 The preprocessing pipeline includes Python scripts that support the application of spatial masks to reconcile
 the contemporary geographic OpenStreetMap (OSM) coastlines with historical hydrographic reconstructions. For example,
 the
 [Viabundus](https://www.landesgeschichte.uni-goettingen.de/handelsstrassen/data/Viabundus-2-water-1500.geojson)
 project's [Water (1500)](https://www.landesgeschichte.uni-goettingen.de/handelsstrassen/data/Viabundus-2-water-1500.geojson)
-layer is applied in this way to mask land areas which have been reclaimed since the 16th century.
+layer is applied in this way to mask land areas which have been reclaimed since the 16th century. A limitation is that
+no oceanographic data are deployed in route-weighting for such areas.
 
 ### Dynamic Processing
 
@@ -101,12 +104,31 @@ for a
 specific month. The route finder adapts to seasonal conditions, allowing month-specific simulations of outward and
 return legs.
 
+### Longevity
+
+A primary goal was to enable users to explore historical maritime routes entirely within the browser, without relying on
+server-side processing or infrastructure. This approach protects the project from disruptions caused by changes in
+funding, hosting, or technical support, problems which are common in DH projects.
+
 ## Coverage
 
-Coverage is currently limited to Europe (as shown in the map at [Preprocessing](#preprocessing)), but can be extended to other areas by running the included Python
-scripts. A lighter-weight subgraph covering the UK and Ireland can be loaded by appending `?aoi=UK-Eire` to the URL.
+Coverage is currently limited to Europe (as shown in the map at [Preprocessing](#preprocessing)), but can be extended to
+other areas by running the included Python
+scripts. A lighter-weight subgraph covering only the UK and Ireland can be loaded by appending `?aoi=UK-Eire` to the
+URL.
 
-![Screenshot 3: UK+Eire Subgraph](/screenshots/uk_eire.png)
+![Screenshot 4: UK+Eire Subgraph](/screenshots/uk_eire.png)
+
+## Limitations
+
+- The in-browser processing approach can be resource-intensive for large datasets, potentially causing performance
+  issues on less powerful devices.
+- Loading very large graphs may result in significant delays or browser memory exhaustion.
+- The lack of server-side support limits the ability to perform real-time data updates.
+- Currently supports only certain maritime regions.
+- The routing and estimation algorithms rely on simplified models that may not capture all historical navigational
+nuances.
+- User interface and visualisation features may require further refinement for accessibility and ease of use.
 
 ## References and Data Sources
 

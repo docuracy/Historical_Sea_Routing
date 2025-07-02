@@ -463,10 +463,21 @@ $(async () => {
         container: 'map',
         style: 'https://tiles.whgazetteer.org/styles/whg-basic-light/style.json',
         zoom: 6,
+        attributionControl: {
+            customAttribution: 'Map Tiles: <a target="_blank" href="https://whgazetteer.org">World Historical Gazetteer</a>',
+            compact: true
+        }
     });
 
     map.on('style.load', async () => {
         await loadMetadata();
+        await polygons(
+            './data/Viabundus-2-water-1500.geojson',
+            map,
+            'viabundus-water',
+            'Water c.1500: Holterman/<a target="_blank" href="https://www.landesgeschichte.uni-goettingen.de/handelsstrassen/info.php">Viabundus</a>',
+            '#c1dbea'
+        );
         await loadAOIGraph();
         if (!(graph && Object.keys(graph).length > 0)) {
             console.error("Graph failed to load or is empty.");
