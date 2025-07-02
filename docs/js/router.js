@@ -159,7 +159,7 @@ function clearRoute() {
 }
 
 // Function to add/update markers on the map
-function addPointMarker(lngLat, color = '#3BB2D0', isStart = true) {
+async function addPointMarker(lngLat, color = '#3BB2D0', isStart = true) {
     // Remove existing marker if it's there
     if (isStart) {
         if (startMarker) startMarker.remove();
@@ -186,12 +186,12 @@ function clearPointMarkers() {
 }
 
 function showToast(message, duration = 3000) {
-  const $toast = $('<div class="toast-message"></div>').text(message);
-  $('body').append($toast);
-  $toast.fadeIn(400);
-  setTimeout(() => {
-    $toast.fadeOut(400, () => $toast.remove());
-  }, duration);
+    const $toast = $('<div class="toast-message"></div>').text(message);
+    $('body').append($toast);
+    $toast.fadeIn(400);
+    setTimeout(() => {
+        $toast.fadeOut(400, () => $toast.remove());
+    }, duration);
 }
 
 // --- Find Closest Graph Node ---
@@ -304,8 +304,9 @@ function computeOneWayRoute(source, target, month, colour) {
         console.log(`Computing route from ${source} to ${target} for month ${month}`);
 
         const weightFn = (edgeKey, attributes) => {
-            const sourceAttrs = graph.getSourceAttributes(edgeKey);
-            const targetAttrs = graph.getTargetAttributes(edgeKey);
+            let sourceAttrs = graph.getSourceAttributes(edgeKey);
+            let targetAttrs = graph.getTargetAttributes(edgeKey);
+
             const temporalWeight = estimateSailingTime(sourceAttrs, targetAttrs, attributes, month);
 
             const bathymetry = (typeof targetAttrs.bathymetry === "number" && !isNaN(targetAttrs.bathymetry)) ? targetAttrs.bathymetry : 0;
@@ -337,8 +338,7 @@ function computeOneWayRoute(source, target, month, colour) {
     }
 }
 
-
-function computeRoutes() {
+async function computeRoutes() {
     const computeStartTime = performance.now();
 
     if (!graph || !graph.hasNode(startPointH3) || !graph.hasNode(endPointH3)) {
@@ -348,8 +348,7 @@ function computeRoutes() {
             graphLoaded: !!graph
         });
         clearRoute();
-        alert("Could not compute route. One or both selected points are not valid graph nodes or graph not loaded.");
-        console.log(`Route Computation (Invalid Input) took: ${(performance.now() - computeStartTime).toFixed(2)} ms`);
+        showToast("Could not compute route. One or both selected points are not valid graph nodes or graph not loaded.");
         return;
     }
 
@@ -359,6 +358,8 @@ function computeRoutes() {
     draughtWithTolerance = vesselParameters.vesselDraughtWithTolerance;
 
     routeLogs = []
+
+    await new Promise(requestAnimationFrame);
 
     // Add result to routeLogs
     routeLogs.push(computeOneWayRoute(startPointH3, endPointH3, month, routeColours[0]));
@@ -375,8 +376,6 @@ function computeRoutes() {
         return;
     }
 
-    // Add a horizontal line after the folder and a GeoJSON Download button
-    pane.addSeparator();
     geoJsonButton = pane.addButton({title: 'Download GeoJSON'});
     const $icon = $('<span>').html(`
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" 
@@ -510,15 +509,17 @@ $(async () => {
             clearPointMarkers();
             updateRouteLegLogs();
             startPointH3 = closestNodeH3;
-            addPointMarker(closestNodeLngLat, '#00FF00', true); // Green for start
+            await addPointMarker(closestNodeLngLat, '#00FF00', true); // Green for start
             selectingStart = false;
             clearRoute(); // Clear previous route
             $(instructions.element).find('button').text('Pick Destination');
         } else {
             endPointH3 = closestNodeH3;
-            addPointMarker(closestNodeLngLat, '#FF0000', false); // Red for end
+            await addPointMarker(closestNodeLngLat, '#FF0000', false); // Red for end
             selectingStart = true; // Reset for next selection cycle
+            await showSpinner("Plotting route…");
             computeRoutes();
+            await hideSpinner();
             $(instructions.element).find('button').text('Pick two Points');
         }
     });
@@ -532,15 +533,41 @@ async function reComputeRouteIfReady() {
 }
 
 async function loadAOIGraph() {
-    const res = await fetch(`data/${aoi}/routing_graph.json.gz`);
-    const compressedData = new Uint8Array(await res.arrayBuffer());
-    const decompressedData = fflate.decompressSync(compressedData);
-    const jsonText = new TextDecoder("utf-8").decode(decompressedData);
-    const json = JSON.parse(jsonText);
+    try {
+        await showSpinner("Fetching graph data…");
 
-    graph = graphology.Graph.from(json);
+        const res = await fetch(`data/${aoi}/routing_graph.msgpack.gz`);
+        if (!res.ok) {
+            throw new Error(`Failed to fetch routing graph: ${res.status} ${res.statusText}`);
+        }
 
-    console.info(`Loaded AOI graph for ${aoi} with ${graph.order} nodes and ${graph.size} edges.`);
+        await updateSpinnerText(`Decompressing ${metadata.node_count.toLocaleString()} nodes and ${metadata.edge_count.toLocaleString()} edges…`);
+        const arrayBuffer = await res.arrayBuffer();
+        const compressedData = new Uint8Array(arrayBuffer);
+        const decompressedData = fflate.decompressSync(compressedData);
+        const graphObject = msgpack.decode(decompressedData);
+
+        await updateSpinnerText("Building graph…");
+        const {DirectedGraph} = graphology;
+        graph = DirectedGraph.from(graphObject);
+        // Add reversed edges
+        graph.forEachEdge((edge, attributes, source, target) => {
+            if (!graph.hasEdge(target, source)) {
+                graph.addDirectedEdgeWithKey(`${edge}_rev`, target, source, {
+                    ...attributes,
+                    dx: -attributes.dx,
+                    dy: -attributes.dy,
+                    reverse: true,
+                });
+            }
+        });
+
+        console.info(`Loaded AOI graph for ${aoi} with ${graph.order} nodes and ${graph.size} edges.`);
+    } catch (err) {
+        console.error(e);
+    } finally {
+        await hideSpinner();
+    }
 }
 
 async function loadMetadata(defaultAOI = "Europe") {

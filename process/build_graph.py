@@ -10,25 +10,20 @@ from pathlib import Path
 
 import geopandas as gpd
 import h3
+import msgpack
 import numpy as np
 import pandas as pd
 from fiona import listlayers
 from tqdm import tqdm
 
 from process.config import AOIS, datasets
-from process.sea_graph_v3 import COASTAL_SEA_RESOLUTION
+from process.sea_graph import COASTAL_SEA_RESOLUTION
 
 # --- Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 AOI = AOIS[1]
-DRAUGHT_THRESHOLD = 4.0  # Vessel draught in metres
-DARKNESS_PENALTY = 3.0  # Penalty multiplier for darkness
-LAND_INVISIBILITY_MULTIPLIER = 3.0  # Penalty multiplier for land visibility
-CURRENT_PENALTY = 2.0  # Penalty multiplier for current direction
-WAVE_PENALTY = 1.2  # Penalty multiplier for wave direction
-WIND_PENALTY = 1.5  # Penalty multiplier for wind direction
 
 docs_directory = Path(__file__).resolve().parent.parent / "docs"
 geo_output_directory = docs_directory / "data" / AOI["name"]
@@ -39,36 +34,6 @@ edge_gpkg = geo_output_directory / "edges.gpkg"
 visibility_parquet = geo_output_directory / "visibility_distance.parquet"
 copernicus_parquet = geo_output_directory / "copernicus.parquet"
 node_env_db = geo_output_directory / "node_env.sqlite3"
-
-
-# def visibility_penalty(h2: dict, e2: dict) -> float:
-#     h2_daylight_ratio = float(h2["daylight_ratio"] or 0.0)
-#     darkness_factor = DARKNESS_PENALTY * (1.0 - h2_daylight_ratio)
-#
-#     h2_clear_land = float(h2["clear_land"] or 0.0)
-#     e2_visibility_m = float(e2["visibility_m"] or 0.0)
-#
-#     if h2_clear_land == 0.0 or h2_clear_land > e2_visibility_m:
-#         return darkness_factor * LAND_INVISIBILITY_MULTIPLIER
-#
-#     return darkness_factor
-
-
-# def directional_penalty(dx: float, dy: float, vector: Tuple[float, float]) -> float:
-#     """Vector alignment penalty; lower is better."""
-#     vx, vy = vector
-#
-#     if vx is None or vy is None:
-#         # If missing vector components, no penalty (neutral)
-#         return 1.0
-#
-#     dot = dx * vx + dy * vy
-#     norm_vec = np.hypot(vx, vy)
-#     norm_dir = np.hypot(dx, dy)
-#     if norm_vec == 0 or norm_dir == 0:
-#         return 1.0
-#     angle = np.arccos(np.clip(dot / (norm_vec * norm_dir), -1.0, 1.0))
-#     return 1.0 + (angle / np.pi)  # 1 (aligned) to 2 (opposite)
 
 
 def load_all_edge_layers() -> gpd.GeoDataFrame:
@@ -208,17 +173,6 @@ def init_db() -> sqlite3.Connection:
     )
     ''')
 
-    # Create edge costs table if not exists
-    # c.execute('''
-    #     CREATE TABLE IF NOT EXISTS edge_costs (
-    #     source TEXT NOT NULL,
-    #     target TEXT NOT NULL,
-    #     month INTEGER NOT NULL,
-    #     weight REAL NOT NULL,
-    #     PRIMARY KEY (source, target, month)
-    # )
-    # ''')
-
     conn.commit()
     return conn, c
 
@@ -268,32 +222,6 @@ def log_random_edge_sample(conn: sqlite3.Connection, cursor: sqlite3.Cursor):
             logger.info(f"Monthly data for {h3_id} (month {random_month}):\n{pprint.pformat(env_dict)}")
         else:
             logger.warning(f"No monthly data for {h3_id} in month {random_month}")
-
-    # Log the computed edge cost for this edge and month if it exists
-    # cursor.execute("""
-    #     SELECT * FROM edge_costs WHERE source = ? AND target = ? AND month = ?
-    # """, (source, target, random_month))
-    # edge_cost_row = cursor.fetchone()
-    # if edge_cost_row:
-    #     colnames = [desc[0] for desc in cursor.description]
-    #     edge_cost_dict = dict(zip(colnames, edge_cost_row))
-    #     logger.info(
-    #         f"Edge cost data for {source} → {target} in month {random_month}:\n{pprint.pformat(edge_cost_dict)}")
-    # else:
-    #     logger.warning(f"No edge cost found for {source} → {target} in month {random_month}")
-
-    # Log the computed edge cost for this edge REVERSED and month if it exists
-    # cursor.execute("""
-    #     SELECT * FROM edge_costs WHERE source = ? AND target = ? AND month = ?
-    # """, (target, source, random_month))
-    # edge_cost_row = cursor.fetchone()
-    # if edge_cost_row:
-    #     colnames = [desc[0] for desc in cursor.description]
-    #     edge_cost_dict = dict(zip(colnames, edge_cost_row))
-    #     logger.info(
-    #         f"Edge cost data for {source} → {target} in month {random_month}:\n{pprint.pformat(edge_cost_dict)}")
-    # else:
-    #     logger.warning(f"No edge cost found for {source} → {target} in month {random_month}")
 
 
 def save_edges_to_db(conn: sqlite3.Connection, cursor: sqlite3.Cursor, edges_df: pd.DataFrame):
@@ -451,74 +379,6 @@ def load_node_env(conn: sqlite3.Connection, cursor: sqlite3.Cursor, batch_size: 
     log_random_edge_sample(conn, cursor)
 
 
-# def compute_and_store_edge_costs(conn: sqlite3.Connection, cursor: sqlite3.Cursor, batch_size: int = 1000):
-#     logger.info("Clearing existing edge costs...")
-#     cursor.execute("DELETE FROM edge_costs")
-#     conn.commit()
-#
-#     logger.info("Computing edge costs...")
-#     cursor.execute("SELECT source, target, length_m, dx, dy FROM edges")
-#     rows = cursor.fetchall()
-#
-#     batch = []
-#     for i, (source, target, length_m, dx, dy) in enumerate(tqdm(rows, desc="Computing edge costs")):
-#
-#         # Load static node data for source and target
-#         cursor.execute("SELECT * FROM nodes WHERE h3_id = ?", (source,))
-#         static_source = cursor.fetchone()
-#         cursor.execute("SELECT * FROM nodes WHERE h3_id = ?", (target,))
-#         static_target = cursor.fetchone()
-#
-#         if not static_source or not static_target:
-#             logger.warning(f"Missing static data for edge {source} → {target}, skipping.")
-#             continue
-#
-#         # Load env data for source and target
-#         cursor.execute("SELECT * FROM node_env WHERE h3_id = ?", (source,))
-#         env_source = {row["month"]: row for row in cursor.fetchall()}
-#         cursor.execute("SELECT * FROM node_env WHERE h3_id = ?", (target,))
-#         env_target = {row["month"]: row for row in cursor.fetchall()}
-#
-#         common_months = set(env_source) & set(env_target)
-#         if not common_months:
-#             continue
-#
-#         for (h1, h2, env2, d_sign) in [
-#             (static_source, static_target, env_target, 1),
-#             (static_target, static_source, env_source, -1),
-#         ]:
-#             dx_signed, dy_signed = dx * d_sign, dy * d_sign
-#
-#             for month in common_months:
-#                 e2 = env2[month]
-#
-#                 cost = length_m \
-#                        * directional_penalty(dx_signed, dy_signed,
-#                                              (e2["current_x"], e2["current_y"])) ** CURRENT_PENALTY \
-#                        * directional_penalty(dx_signed, dy_signed, (e2["wind_x"], e2["wind_y"])) ** WIND_PENALTY \
-#                        * directional_penalty(dx_signed, dy_signed, (e2["wave_x"], e2["wave_y"])) ** WAVE_PENALTY \
-#                        * visibility_penalty(h2, e2)
-#
-#                 batch.append((h1["h3_id"], h2["h3_id"], month, cost))
-#
-#         if len(batch) >= batch_size:
-#             cursor.executemany("""
-#                 INSERT OR REPLACE INTO edge_costs (source, target, month, weight)
-#                 VALUES (?, ?, ?, ?)
-#             """, batch)
-#             conn.commit()
-#             batch.clear()
-#
-#     if batch:
-#         cursor.executemany("""
-#             INSERT OR REPLACE INTO edge_costs (source, target, month, weight)
-#             VALUES (?, ?, ?, ?)
-#         """, batch)
-#         conn.commit()
-#
-#     logger.info("✔ Completed storing edge costs.")
-
-
 def clean_number(x):
     if isinstance(x, float):
         if math.isnan(x) or math.isinf(x):
@@ -628,98 +488,126 @@ def iter_edges_keyset(cursor, batch_size=1000):
             }
             last_source, last_target = source, target
 
-
-# def iter_edges_keyset(cursor, batch_size=1000):
-#     last_source = None
-#     last_target = None
-#
-#     while True:
-#         if last_source is None:
-#             cursor.execute(f"""
-#                 SELECT ec.source, ec.target, ec.month, ec.weight,
-#                        e.length_m, e.dx, e.dy
-#                 FROM edge_costs ec
-#                 JOIN edges e ON (e.source = ec.source AND e.target = ec.target) OR (e.source = ec.target AND e.target = ec.source)
-#                 ORDER BY ec.source, ec.target
-#                 LIMIT {batch_size}
-#             """)
-#         else:
-#             cursor.execute(f"""
-#                 SELECT ec.source, ec.target, ec.month, ec.weight,
-#                        e.length_m, e.dx, e.dy
-#                 FROM edge_costs ec
-#                 JOIN edges e ON (e.source = ec.source AND e.target = ec.target) OR (e.source = ec.target AND e.target = ec.source)
-#                 WHERE (ec.source > ?)
-#                    OR (ec.source = ? AND ec.target > ?)
-#                 ORDER BY ec.source, ec.target
-#                 LIMIT {batch_size}
-#             """, (last_source, last_source, last_target))
-#
-#         batch = cursor.fetchall()
-#         if not batch:
-#             break
-#
-#         # Group by (source, target)
-#         grouped = defaultdict(lambda: {"w": [None] * 12})
-#         for source, target, month, weight, length_m, dx, dy in batch:
-#             key = (source, target)
-#             g = grouped[key]
-#             g["length_m"] = clean_number(length_m)
-#             g["dx"] = clean_number(dx)
-#             g["dy"] = clean_number(dy)
-#             g["w"][month - 1] = clean_number(weight)
-#
-#         # Yield edges grouped by (source,target)
-#         for (source, target), attrs in grouped.items():
-#             yield {"source": source, "target": target, "attributes": attrs}
-#             last_source, last_target = source, target
-
-
 def build_and_export_graphs_from_db(cursor, batch_size=1000):
-    logger.info("Streaming graph export...")
-    gzip_path = geo_output_directory / "routing_graph.json.gz"
+    logger.info("Building graph in memory for MessagePack export...")
+    msgpack_gzip_path = geo_output_directory / "routing_graph.msgpack.gz"
 
-    with gzip.open(gzip_path, "wt", encoding="utf-8") as f:
-        f.write("{\n")
-        f.write('"attributes": {},\n')
+    graph_data = {
+        "attributes": {},
+        "nodes": [],
+        "edges": []
+    }
 
-        # Get total nodes count
-        cursor.execute("SELECT COUNT(*) FROM nodes")
-        total_nodes = cursor.fetchone()[0]
+    # Get total nodes count for progress bar
+    cursor.execute("SELECT COUNT(*) FROM nodes")
+    total_nodes = cursor.fetchone()[0]
 
-        # Write nodes with progress bar and total
-        f.write('"nodes": [\n')
-        first = True
-        for node in tqdm(iter_nodes_keyset(cursor, batch_size), desc="Exporting nodes", unit="nodes",
-                         total=total_nodes):
-            if not first:
-                f.write(",\n")
-            else:
-                first = False
-            json.dump(node, f, separators=(",", ":"))
-        f.write("\n],\n")
-        print("Node example:", json.dumps(node, indent=2), flush=True)
+    # Populate nodes list
+    logger.info("Collecting nodes...")
+    for node in tqdm(iter_nodes_keyset(cursor, batch_size), desc="Collecting nodes", unit="nodes",
+                     total=total_nodes):
+        graph_data["nodes"].append(node)
+    logger.info(f"Collected {len(graph_data['nodes'])} nodes.")
 
-        # Get total edges count
-        cursor.execute("SELECT COUNT(*) FROM edges")
-        total_edges = cursor.fetchone()[0] * 2  # Each edge is used twice (source→target and target→source)
+    # Get total edges count for progress bar
+    # Note: total_edges here is from the DB, which should now contain canonical, unique edges
+    cursor.execute("SELECT COUNT(*) FROM edges")
+    total_edges_db = cursor.fetchone()[0]
 
-        # Write edges with progress bar and total
-        f.write('"edges": [\n')
-        first = True
-        for edge in tqdm(iter_edges_keyset(cursor, batch_size), desc="Exporting edges", unit="edges",
-                         total=total_edges):
-            if not first:
-                f.write(",\n")
-            else:
-                first = False
-            json.dump(edge, f, separators=(",", ":"))
-        f.write("\n]\n")
-        print("Edge example:", json.dumps(edge, indent=2), flush=True)
+    # Populate edges list with canonicalization and sign flipping
+    logger.info("Collecting and canonicalizing edges...")
+    for edge in tqdm(iter_edges_keyset(cursor, batch_size), desc="Collecting edges", unit="edges",
+                     total=total_edges_db):  # Use total_edges_db for accurate progress
+        source = edge.get("source")
+        target = edge.get("target")
 
-        f.write("}\n")
+        # Apply canonicalization and sign flip
+        if source > target:
+            # Swap source and target
+            edge["source"], edge["target"] = target, source
+            # Flip dx and dy signs
+            if edge["attributes"].get("dx") is not None:
+                edge["attributes"]["dx"] *= -1
+            if edge["attributes"].get("dy") is not None:
+                edge["attributes"]["dy"] *= -1
 
-    logger.info(f"✔ Exported graph to {gzip_path}")
+        graph_data["edges"].append(edge)
+    logger.info(f"Collected and canonicalized {len(graph_data['edges'])} edges.")
+
+    # Pack the entire graph data to MessagePack binary format
+    logger.info("Packing graph data to MessagePack...")
+    packed_data = msgpack.packb(graph_data, use_bin_type=True)  # use_bin_type=True for Python bytes
+
+    # Compress the MessagePack data using gzip
+    logger.info("Compressing MessagePack data with gzip...")
+    compressed_data = gzip.compress(packed_data)
+
+    # Write the gzipped MessagePack data to file
+    with open(msgpack_gzip_path, "wb") as f:
+        f.write(compressed_data)
+
+    logger.info(f"✔ Exported graph to {msgpack_gzip_path}")
+
+    # Print a sample edge from the *in-memory* graph_data for verification
+    if graph_data["edges"]:
+        print("\nEdge example (from in-memory graph_data, after canonicalization):")
+        print(json.dumps(graph_data["edges"][0], indent=2), flush=True)  # Use json.dumps for readability
+
+    return len(graph_data["nodes"]), len(graph_data["edges"])
+
+
+# def build_and_export_graphs_from_db(cursor, batch_size=1000):
+#     logger.info("Streaming graph export...")
+#     gzip_path = geo_output_directory / "routing_graph.json.gz"
+#
+#     with gzip.open(gzip_path, "wt", encoding="utf-8") as f:
+#         f.write("{\n")
+#         f.write('"attributes": {},\n')
+#
+#         # Get total nodes count
+#         cursor.execute("SELECT COUNT(*) FROM nodes")
+#         total_nodes = cursor.fetchone()[0]
+#
+#         # Write nodes with progress bar and total
+#         f.write('"nodes": [\n')
+#         first = True
+#         for node in tqdm(iter_nodes_keyset(cursor, batch_size), desc="Exporting nodes", unit="nodes",
+#                          total=total_nodes):
+#             if not first:
+#                 f.write(",\n")
+#             else:
+#                 first = False
+#             json.dump(node, f, separators=(",", ":"))
+#         f.write("\n],\n")
+#         print("Node example:", json.dumps(node, indent=2), flush=True)
+#
+#         # Get total edges count
+#         cursor.execute("SELECT COUNT(*) FROM edges")
+#         total_edges = cursor.fetchone()[0] * 2  # Each edge is used twice (source→target and target→source)
+#
+#         # Write edges with progress bar and total
+#         f.write('"edges": [\n')
+#         first = True
+#         for edge in tqdm(iter_edges_keyset(cursor, batch_size), desc="Exporting edges", unit="edges",
+#                          total=total_edges):
+#             source = edge.get("source")
+#             target = edge.get("target")
+#             if source > target:
+#                 # Ensure edges are in canonical order (source < target)
+#                 edge["source"], edge["target"] = target, source
+#                 edge["attributes"]["dx"] *= -1
+#                 edge["attributes"]["dy"] *= -1
+#             if not first:
+#                 f.write(",\n")
+#             else:
+#                 first = False
+#             json.dump(edge, f, separators=(",", ":"))
+#         f.write("\n]\n")
+#         print("Edge example:", json.dumps(edge, indent=2), flush=True)
+#
+#         f.write("}\n")
+#
+#     logger.info(f"✔ Exported graph to {gzip_path}")
 
 
 # def build_and_export_graphs_from_db(cursor: sqlite3.Cursor):
@@ -766,7 +654,7 @@ def build_and_export_graphs_from_db(cursor, batch_size=1000):
 #     logger.info(f"✔ Exported {gzip_path} ({len(js_graph)} nodes)")
 
 
-def save_metadata():
+def save_metadata(node_length, edge_length):
     lon_min, lat_min, lon_max, lat_max = AOI["bounds"]
     metadata_dict = {
         "name": AOI["name"],
@@ -777,7 +665,9 @@ def save_metadata():
             "north": lat_max
         },
         "h3_resolution": COASTAL_SEA_RESOLUTION,
-        "sources": datasets
+        "sources": datasets,
+        "node_count": node_length,
+        "edge_count": edge_length * 2,  # Reversed edges are added in the browser
     }
     metadata_file = geo_output_directory / "metadata.json"
     with open(metadata_file, "w") as f:
@@ -793,14 +683,13 @@ def main():
         conn, cursor = init_db()
         load_node_env(conn, cursor)
 
-    # compute_and_store_edge_costs(conn, cursor)
-    build_and_export_graphs_from_db(cursor)
+    node_length, edge_length = build_and_export_graphs_from_db(cursor)
 
     conn.close()
 
     logger.info("✅ All graphs built and exported.")
 
-    save_metadata()
+    save_metadata(node_length, edge_length)
 
 
 if __name__ == "__main__":

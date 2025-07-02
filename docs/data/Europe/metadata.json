@@ -152,5 +152,7 @@
             "zoom_level": 12,
             "source_url_template": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
         }
-    }
+    },
+    "node_count": 170282,
+    "edge_count": 854558
 }
