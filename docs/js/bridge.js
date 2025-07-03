@@ -10,6 +10,7 @@ let instructions;
 let routeLegFolders = {};
 let geoJsonButton;
 
+
 function initDeck() {
 
     const defaultVessel = "default";
@@ -154,6 +155,60 @@ function initDeck() {
     $('#pane-container').append($credit);
 
 }
+
+
+function logPathAttributes(graph, path, month) {
+    const METRES_TO_KM = 0.001;
+    const METRES_TO_MILES = 0.000621371;
+    const METRES_TO_NAUTICAL_MILES = 1 / 1852;
+    const SECONDS_TO_HOURS = 1 / 3600;
+    const SECONDS_TO_DAYS = 1 / (3600 * 24);
+
+    let totalLength = 0;
+    let totalTime = 0;
+
+    for (let i = 0; i < path.length - 1; i++) {
+        const sourceId = path[i];
+        const targetId = path[i + 1];
+        const source = graph.getNodeAttributes(sourceId);
+        const target = graph.getNodeAttributes(targetId);
+        const edgeAttrs = graph.getEdgeAttributes(sourceId, targetId);
+
+        if (edgeAttrs && typeof edgeAttrs.length_m === "number") {
+            totalLength += edgeAttrs.length_m;
+
+            const time = estimateSailingTime(source, target, edgeAttrs, month, true);
+            if (isFinite(time)) {
+                totalTime += time;
+            } else {
+                console.warn(`Infinite time estimate for ${sourceId} -> ${targetId}`);
+            }
+        } else {
+            console.warn(`Missing length_m for edge ${sourceId} -> ${targetId}`);
+        }
+    }
+
+    const distanceKm = `${(totalLength * METRES_TO_KM).toFixed(0)} km`;
+    const distanceMiles = `${(totalLength * METRES_TO_MILES).toFixed(0)} mi`;
+    const distanceNautical = `${(totalLength * METRES_TO_NAUTICAL_MILES).toFixed(0)} nmi`;
+
+    const totalHours = totalTime * SECONDS_TO_HOURS;
+    const totalDays = Math.floor(totalTime * SECONDS_TO_DAYS);
+    const remainingHours = Math.round(totalHours - totalDays * 24);
+
+    const timeLabel = totalDays >= 1
+        ? `${totalDays} day${totalDays > 1 ? 's' : ''} ${remainingHours} hr${remainingHours !== 1 ? 's' : ''}`
+        : `${totalHours.toFixed(1)} hrs`;
+
+    return {
+        'Duration': timeLabel,
+        'Distance': distanceKm,
+        'Distance (mi)': distanceMiles,
+        'Distance (nmi)': distanceNautical,
+        'Nodes': path.length.toString()
+    };
+}
+
 
 function updateRouteLegLogs(legTitle = false, logs = false, colour = 'black') {
     // Remove the GeoJSON button if it exists
