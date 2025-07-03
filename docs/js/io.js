@@ -2,50 +2,56 @@
 
 function openGraphDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open('GraphCacheDB', 1);
-        request.onupgradeneeded = () => {
-            request.result.createObjectStore('graphs');
+        const request = indexedDB.open('GraphCacheDB', 4);
+
+        request.onupgradeneeded = (event) => {
+            const db = request.result;
+
+            if (!db.objectStoreNames.contains('graphs')) {
+                db.createObjectStore('graphs');
+            } else {
+                const tx = event.target.transaction;
+                const store = tx.objectStore('graphs');
+                store.clear();  // wipe all cached graph data
+            }
         };
+
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
     });
 }
 
 
-async function storeGraph(graphId, decompressedUint8Array, finalGraphObject) {
+async function storeGraph(graphId, finalGraphObject) {
     const db = await openGraphDB();
-    const tx = db.transaction('graphs', 'readwrite');
-    const store = tx.objectStore('graphs');
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction('graphs', 'readwrite');
+        const store = tx.objectStore('graphs');
 
-    store.put(decompressedUint8Array, `binary_${graphId}`);
-    store.put(finalGraphObject, `graphObject_${graphId}`);
+        const req = store.put(finalGraphObject, graphId);
 
-    return tx.done || tx.complete;
+        req.onerror = () => reject(req.error);
+
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+    });
 }
-
 
 async function loadCachedGraph(graphId) {
     const db = await openGraphDB();
-    const tx = db.transaction('graphs', 'readonly');
-    const store = tx.objectStore('graphs');
-
-    const graphObjectReq = store.get(`graphObject_${graphId}`);
-    const binaryReq = store.get(`binary_${graphId}`);
-
     return new Promise((resolve, reject) => {
-        graphObjectReq.onsuccess = () => {
-            if (graphObjectReq.result) {
-                resolve({type: 'object', data: graphObjectReq.result});
-            } else {
-                binaryReq.onsuccess = () => {
-                    resolve(binaryReq.result
-                        ? {type: 'binary', data: binaryReq.result}
-                        : null);
-                };
-                binaryReq.onerror = () => reject(binaryReq.error);
-            }
+        const tx = db.transaction('graphs', 'readonly');
+        const store = tx.objectStore('graphs');
+
+        const req = store.get(graphId);
+
+        req.onsuccess = () => {
+            if (req.result) resolve({type: 'object', data: req.result});
+            else resolve(null);
         };
-        graphObjectReq.onerror = () => reject(graphObjectReq.error);
+
+        req.onerror = () => reject(req.error);
     });
 }
 
@@ -61,9 +67,10 @@ async function loadAOIGraph() {
         const cacheTime = performance.now() - cacheStart;
 
         if (cached?.type === 'object') {
+            await updateSpinnerText(`Loading cached graph object for ${aoi}…`);
             console.log(`[Cache] Final graph object loaded in ${cacheTime.toFixed(2)} ms.`);
             const buildStart = performance.now();
-            const { DirectedGraph } = graphology;
+            const {DirectedGraph} = graphology;
             graph = DirectedGraph.from(cached.data);
             const buildTime = performance.now() - buildStart;
             console.log(`[Build] Graph loaded from cached object in ${buildTime.toFixed(2)} ms.`);
@@ -87,7 +94,7 @@ async function loadAOIGraph() {
             console.log(`[Decode] Decoded raw graph in ${decodeTime.toFixed(2)} ms.`);
 
             const buildStart = performance.now();
-            const { DirectedGraph } = graphology;
+            const {DirectedGraph} = graphology;
             graph = DirectedGraph.from(graphObject);
 
             graph.forEachEdge((edge, attributes, source, target) => {
@@ -104,9 +111,10 @@ async function loadAOIGraph() {
             const buildTime = performance.now() - buildStart;
             console.log(`[Build] Graph built and reversed in ${buildTime.toFixed(2)} ms.`);
 
+            await updateSpinnerText(`Caching graph object for ${aoi} for faster loading in future…`);
             const exportStart = performance.now();
             const finalGraphObject = graph.export();
-            await storeGraph(graphId, decompressed.buffer, finalGraphObject);
+            await storeGraph(graphId, finalGraphObject);
             const exportTime = performance.now() - exportStart;
             console.log(`[Cache] Stored finalised graph object in ${exportTime.toFixed(2)} ms.`);
         }
