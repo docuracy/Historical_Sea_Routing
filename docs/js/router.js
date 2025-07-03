@@ -143,10 +143,12 @@ async function computeRoutes() {
         .find('.tp-btnv_t').prepend($icon);
     geoJsonButton.on('click', downloadGeoJson);
 
-    map.fitBounds(routeBounds, {
-        padding: {top: 20, bottom: 20, left: pane.element.offsetWidth, right: 20},
-        duration: 3000
-    });
+    if (!isMobileDevice()) {
+        map.fitBounds(routeBounds, {
+            padding: {top: 20, bottom: 20, left: pane.element.offsetWidth, right: 20},
+            duration: 3000
+        });
+    }
 
     console.log(`Total Route Computation took: ${(performance.now() - computeStartTime).toFixed(2)} ms`);
 }

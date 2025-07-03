@@ -22,7 +22,6 @@ let routeBounds = new maplibregl.LngLatBounds();
 let routeLogs;
 
 $(async () => {
-
     await loadMetadata();
     loadAOIGraph();
     initMap();

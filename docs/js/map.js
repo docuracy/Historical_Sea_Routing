@@ -17,15 +17,14 @@ function initMap() {
 
     map.on('style.load', async () => {
 
-        if (!isMobileDevice()) {
-            map.setProjection({type: 'globe'});
-        }
-
         const {west, south, east, north} = metadata.bounds;
 
-        map.fitBounds([[west, south], [east, north]], {
-            padding: {top: 20, bottom: 20, left: pane.element.offsetWidth, right: 20},
-        });
+        if (!isMobileDevice()) {
+            map.setProjection({type: 'globe'});
+            map.fitBounds([[west, south], [east, north]], {
+                padding: {top: 20, bottom: 20, left: pane.element.offsetWidth, right: 20},
+            });
+        }
 
         await polygons(
             './data/Viabundus-2-water-1500.geojson',
