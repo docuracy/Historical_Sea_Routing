@@ -1,5 +1,5 @@
 // vite.config.js
 export default {
-  base: './', // Required for GitHub Pages
+  base: '/Historical_Sea_Routing/', // Required for GitHub Pages
   publicDir: 'public',
 };
