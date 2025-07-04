@@ -4,6 +4,6 @@ export default {
   publicDir: 'public',
   build: {
     outDir: '../docs', // build into the root-level 'docs/' folder
-    emptyOutDir: true
+    emptyOutDir: false
   }
 };
