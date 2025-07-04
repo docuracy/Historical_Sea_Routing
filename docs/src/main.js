@@ -1,16 +1,13 @@
 // main.js
 
 import $ from 'jquery';
-import {hideSpinner, initWorker, loadMetadata} from './utils'
+import {initWorker, loadMetadata} from './utils'
 import {initMap} from './map';
 import {initDeck} from './quarterdeck';
 import {initVesselPresets} from "./sailing_vessels";
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 export let worker;
-
-window.$ = $;
-window.jQuery = $;
 
 $(async () => {
     await loadMetadata();
