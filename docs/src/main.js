@@ -9,6 +9,9 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 export let worker;
 
+window.$ = $;
+window.jQuery = $;
+
 $(async () => {
     await loadMetadata();
     await initVesselPresets();
