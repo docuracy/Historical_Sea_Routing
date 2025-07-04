@@ -42,7 +42,8 @@
 //     "dy": -0.055045009742827625
 // }
 
-function estimateSailingTime(source, target, edge, month, timeOnly = false) {
+export function estimateSailingTime(payload) {
+    const {source, target, edge, month, vesselParameters, timeOnly = false} = payload;
 
     // Helper to safely get number values, defaulting if not valid
     function safeValue(value, defaultValue) {

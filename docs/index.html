@@ -4,41 +4,22 @@
     <meta charset="UTF-8"/>
     <title>Sea Router</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-
-    <link href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet"/>
     <link href="css/styles.css" rel="stylesheet"/>
     <link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96"/>
     <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
     <link rel="shortcut icon" href="favicon.ico"/>
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"/>
     <meta name="apple-mobile-web-app-title" content="HistoricalSeaRouting"/>
-    <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/fflate@0.7.4/umd/index.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/msgpack-lite/0.1.26/msgpack.min.js"></script>
-    <script src="https://github.com/graphology/graphology/releases/download/0.26.0/graphology.min.js"></script>
-    <script src="https://github.com/graphology/graphology/releases/download/0.26.0/graphology-library.min.js"></script>
-    <script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.umd.js"></script>
-    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.16.1/proj4.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tweakpane@3.1.4/dist/tweakpane.min.js"></script>
 </head>
 <body>
 <div id="map"></div>
 <div id="pane-container" style="position: absolute; top: 10px; left: 10px; z-index: 1000;"></div>
 <div id="spinner-overlay">
-  <div id="spinner-container">
-    <div class="spinner"></div>
-    <div id="spinner-text">Loading…</div>
-  </div>
+    <div id="spinner-container">
+        <div class="spinner"></div>
+        <div id="spinner-text">Loading…</div>
+    </div>
 </div>
-<script src="js/main.js"></script>
-<script src="js/map.js"></script>
-<script src="js/router.js"></script>
-<script src="js/io.js"></script>
-<script src="js/sailing.js"></script>
-<script src="js/sailing_vessels.js"></script>
-<script src="js/bridge.js"></script>
-<script src="js/utils.js"></script>
+<script type="module" src="src/main.js"></script>
 </body>
 </html>

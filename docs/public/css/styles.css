@@ -77,6 +77,10 @@ body, html {
     white-space: nowrap; /* prevents line breaks */
 }
 
+.folder-icon {
+    margin-right: 2px;
+}
+
 #spinner-overlay {
   position: fixed;
   top: 0;

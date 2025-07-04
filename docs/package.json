@@ -1,0 +1,24 @@
+{
+  "name": "sea-router",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@turf/turf": "^6.5.0",
+    "graphology": "^0.26.0",
+    "graphology-shortest-path": "^2.1.0",
+    "h3-js": "^4.1.0",
+    "jquery": "^3.7.1",
+    "maplibre-gl": "^5.6.0",
+    "msgpack-lite": "^0.1.26",
+    "pako": "^2.1.0",
+    "proj4": "^2.16.1",
+    "tweakpane": "^3.1.4"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}
