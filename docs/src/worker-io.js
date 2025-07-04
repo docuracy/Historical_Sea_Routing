@@ -83,7 +83,8 @@ export async function loadAOIGraph(payload) {
             console.log(`[Cache] Loaded graph object for ${graphId} from IndexedDB.`);
         } else {
             console.log(`[Cache] No cached graph object found for ${graphId}. Fetching from network...`);
-            const graphFile = `/data/${aoi}/routing_graph.msgpack.gz`; // http://localhost:5173/data/Europe/routing_graph.msgpack.gz
+            const basePath = import.meta.env.BASE_URL;
+            const graphFile = `${basePath}/data/${aoi}/routing_graph.msgpack.gz`; // http://localhost:5173/data/Europe/routing_graph.msgpack.gz
 
             const response = await fetch(graphFile);
             if (!response.ok) {
