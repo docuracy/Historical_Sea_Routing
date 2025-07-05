@@ -92,8 +92,6 @@ export function initMap() {
                 }
             });
         }
-
-        document.getElementById('map')?.classList.add('visible');
     });
 
     state.map.on('click', async (e) => {
@@ -119,6 +117,7 @@ export function initMap() {
             }
         });
     });
+
 }
 
 

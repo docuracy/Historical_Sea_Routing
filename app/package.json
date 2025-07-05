@@ -17,6 +17,8 @@
     "msgpack-lite": "^0.1.26",
     "pako": "^2.1.0",
     "proj4": "^2.16.1",
+    "starfield-webgl": "^1.4.2",
+    "threejs-galaxy": "^1.0.4",
     "tweakpane": "^3.1.4",
     "wikibase-sdk": "^10.2.3",
     "wikidata-sdk": "^8.1.1"

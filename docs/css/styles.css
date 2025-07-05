@@ -1,8 +1,9 @@
 body, html {
     margin: 0;
     padding: 0;
-    height: 100%;
+    height: 100vh;
     font-family: Roboto Mono, Source Code Pro, Menlo, Courier, monospace;
+    overflow: hidden;
 }
 
 #map {
@@ -12,10 +13,22 @@ body, html {
     width: 100%;
     height: 100%;
     opacity: 0;
-    transition: opacity 1s ease;
+    transition: opacity 3s ease;
 }
 
 #map.visible {
+    opacity: 1;
+}
+
+#pane-container {
+    border: 1px solid white;
+    border-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transition: opacity 3s ease;
+}
+
+#pane-container.visible {
     opacity: 1;
 }
 
@@ -56,21 +69,45 @@ body, html {
     margin-right: -4px;
 }
 
+#starfield {
+    opacity: 0.7;
+}
+
+#milkyway {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: url('../milky-way.jpg') no-repeat center center;
+    background-size: cover;
+    z-index: -20;
+    animation: panMilkyWay 1200s linear infinite alternate;
+}
+
+@keyframes panMilkyWay {
+    from {
+        background-position-x: 0%; /* Start with the leftmost part of the image visible */
+    }
+    to {
+        background-position-x: 100%; /* Pan to show the rightmost part of the image */
+    }
+}
+
 .tp-lblv {
     user-select: none;
 }
 
 #credit {
     display: block;
-    margin-top: 10px;
-    font-size: 12px;
-    color: #37383d;
+    font-size: 11px;
+    color: #adafb8;
     text-align: center;
-    text-shadow: 0 0 3px white;
+    padding: 4px;
 }
 
 #credit a {
-    color: #37383d;
+    color: #adafb8;
     text-decoration: none;
 }
 
@@ -83,7 +120,7 @@ body, html {
     color: white;
     padding: 10px 20px;
     border-radius: 5px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
     z-index: 9999;
     opacity: 0;
     transition: opacity 0.4s ease;
@@ -95,47 +132,42 @@ body, html {
 }
 
 #spinner-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background: rgba(255, 255, 255, 0.85);
-  opacity: 0;                     /* start hidden */
-  pointer-events: none;           /* ignore mouse events when hidden */
-  transition: opacity 0.4s ease;
-  z-index: 9999;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: transparent;
+    opacity: 0; /* start hidden */
+    pointer-events: none; /* ignore mouse events when hidden */
+    transition: opacity 0.4s ease;
+    z-index: 9999;
 }
 
 #spinner-overlay.visible {
-  opacity: 1;                     /* fade in */
-  pointer-events: all;            /* block interaction when visible */
+    opacity: 1; /* fade in */
+    pointer-events: all; /* block interaction when visible */
 }
 
 #spinner-container {
-  text-align: center;
+    text-align: center;
 }
 
-.spinner {
-  border: 6px solid #eee;
-  border-top: 6px solid #007bff;
-  border-radius: 50%;
-  width: 48px;
-  height: 48px;
-  margin: 0 auto 10px;
-  animation: spin 0.8s linear infinite;
+#spinner-wheel {
+    animation: swing 3s ease-in-out alternate infinite;
+    display: block;
+    fill: #d2c7c2;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+@keyframes swing {
+    0%   { transform: rotate(-30deg); }
+    100% { transform: rotate(30deg); }
 }
 
 #spinner-text {
-  font-size: 1.1em;
-  color: #333;
+    font-size: 1.1em;
+    color: #d2c7c2;
 }

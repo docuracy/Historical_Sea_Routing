@@ -13,7 +13,7 @@ export const state = {
 
     // Quarterdeck parameters
     vesselPresets: {},
-    vesselParameters: null,
+    vesselParameters: {},
     pane: null,
     monthInput: null,
     currentMonth: null,

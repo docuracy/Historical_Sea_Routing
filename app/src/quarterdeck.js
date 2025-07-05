@@ -6,23 +6,49 @@ import {getVesselConfig} from "./sailing_vessels";
 import * as Tweakpane from "tweakpane";
 import {downloadGeoJson, isMobileDevice} from "./utils";
 
+const DISTANCE_UNITS = {
+    km: {label: 'Kilometres', factor: 0.001, symbol: 'km'},
+    mi: {label: 'Miles', factor: 0.000621371, symbol: 'mi'},
+    league_en: {label: 'English Leagues', factor: 1 / 4828, symbol: 'le (en: 4828m)'},
+    league_es: {label: 'Spanish Leagues', factor: 1 / 5903, symbol: 'le (es: 5903m)'},
+    league_fr: {label: 'French Leagues', factor: 1 / 3248, symbol: 'le (fr: 3248m)'},
+    league_pt: {label: 'Portuguese Leagues', factor: 1 / 5555.56, symbol: 'le (pt: 5555m)'},
+    league_rom: {label: 'Roman Leagues', factor: 1 / 2200, symbol: 'le (rom: 2200m)'},
+};
+
 export function initDeck() {
 
-    const defaultVessel = "default";
-    const defaultVesselConfig = getVesselConfig(defaultVessel);
+    let defaultVesselConfig;
+    let savedParams = localStorage.getItem('vesselParameters');
+    if (savedParams) {
+        try {
+            Object.assign(state.vesselParameters, JSON.parse(savedParams));
+            state.vesselParameters.play = false; // Ensure month-cycling is reset
+            defaultVesselConfig = state.vesselParameters;
+        } catch {
+            console.warn('Failed to parse saved vessel parameters, using defaults.');
+            savedParams = false;
+        }
+    }
+    if (!savedParams) {
+        // If no saved parameters, set defaults
+        const defaultVessel = 'default';
+        defaultVesselConfig = getVesselConfig(defaultVessel);
+        state.vesselParameters = {
+            vesselType: defaultVessel,
+            month: 1,
+            play: false,
+            return: false,
+            showPorts: true,
+            distanceUnit: 'mi', // Default to miles
+            ...defaultVesselConfig
+        };
+    }
 
     if (state.isMobileDevice) {
         state.openOptions = false; // Close options pane on mobile
         state.openLogs = false; // Close logs pane on mobile
     }
-
-    state.vesselParameters = {
-        vesselType: defaultVessel,
-        month: 1,
-        play: false,
-        return: false,
-        ...defaultVesselConfig
-    };
 
     state.pane = new Tweakpane.Pane({container: document.getElementById('pane-container')});
 
@@ -76,9 +102,22 @@ export function initDeck() {
         label: 'Include Return',
     });
 
-    const portToggle = rootFolder.addInput(state, 'showPorts', {
+    const portToggle = rootFolder.addInput(state.vesselParameters, 'showPorts', {
         label: 'Show Ports',
     });
+
+    const distanceUnitInput = rootFolder.addInput(state.vesselParameters, 'distanceUnit', {
+        options: Object.fromEntries(
+            Object.entries(DISTANCE_UNITS).map(([key, {label}]) => [label, key])
+        ),
+        label: 'Distance Unit',
+    });
+
+    // distanceUnitInput.on('change', () => {
+    //     if (!state.isProgrammaticChange) {
+    //         reComputeRouteIfReady();
+    //     }
+    // });
 
     // Create a folder with a title and make it collapsible
     const numericFolder = rootFolder.addFolder({
@@ -123,7 +162,7 @@ export function initDeck() {
 
         state.isProgrammaticChange = false; // STOP suppressing recomputes
 
-        reComputeRouteIfReady(); // run once after all updates
+        // reComputeRouteIfReady(); // run once after all updates
     });
 
     state.monthInput.on("change", () => {
@@ -131,7 +170,7 @@ export function initDeck() {
             stopMonthCycle();
         }
         state.isProgrammaticChange = false;
-        reComputeRouteIfReady();
+        // reComputeRouteIfReady();
     });
 
     state.playInput.on('change', (ev) => {
@@ -148,17 +187,11 @@ export function initDeck() {
         }
     });
 
-    state.returnInput.on('change', (ev) => {
-        state.vesselParameters.return = ev.value;
-        reComputeRouteIfReady();
-    });
-
-    Object.values(numericInputs).forEach(input => {
-        input.on('change', () => {
-            if (!state.isProgrammaticChange) {
-                reComputeRouteIfReady();
-            }
-        });
+    rootFolder.on('change', () => {
+        if (!state.isProgrammaticChange) {
+            localStorage.setItem('vesselParameters', JSON.stringify(state.vesselParameters));
+            reComputeRouteIfReady();
+        }
     });
 
     portToggle.on('change', (ev) => {
@@ -186,24 +219,16 @@ export function initDeck() {
           About
         </a>
     `;
-    document.getElementById('pane-container').appendChild(credit);
+    document.getElementById('pane-container').querySelector('div').appendChild(credit);
 
 }
 
 
 function logPathAttributes(log) {
-    const {totalLength, totalUnweightedTime, pathNodeKeys} = log;
+    const {totalLength, totalUnweightedTime} = log;
 
-    const METRES_TO_KM = 0.001;
-    const METRES_TO_MILES = 0.000621371;
-    const METRES_TO_NAUTICAL_MILES = 1 / 1852;
     const SECONDS_TO_HOURS = 1 / 3600;
     const SECONDS_TO_DAYS = 1 / (3600 * 24);
-
-
-    const distanceKm = `${(totalLength * METRES_TO_KM).toFixed(0)} km`;
-    const distanceMiles = `${(totalLength * METRES_TO_MILES).toFixed(0)} mi`;
-    const distanceNautical = `${(totalLength * METRES_TO_NAUTICAL_MILES).toFixed(0)} nmi`;
 
     const totalHours = totalUnweightedTime * SECONDS_TO_HOURS;
     const totalDays = Math.floor(totalUnweightedTime * SECONDS_TO_DAYS);
@@ -213,12 +238,16 @@ function logPathAttributes(log) {
         ? `${totalDays} day${totalDays > 1 ? 's' : ''} ${remainingHours} hr${remainingHours !== 1 ? 's' : ''}`
         : `${totalHours.toFixed(1)} hrs`;
 
+    // Convert distance based on currently selected unit
+    const unitKey = state.vesselParameters.distanceUnit || 'mi';
+    const selectedUnit = DISTANCE_UNITS[unitKey];
+
+    // Format distance for selected unit
+    const distanceSelected = (totalLength * selectedUnit.factor).toFixed(0);
+
     return {
         'Duration': timeLabel,
-        'Distance': distanceKm,
-        'Distance (mi)': distanceMiles,
-        'Distance (nmi)': distanceNautical,
-        'Nodes': pathNodeKeys.length.toString()
+        'Distance': `${distanceSelected} ${selectedUnit.symbol}`,
     };
 }
 

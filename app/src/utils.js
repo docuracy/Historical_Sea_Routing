@@ -6,6 +6,13 @@ import {state} from "./state";
 import {handleFindClosestNode} from "./map";
 import {handleComputeRoute} from "./router";
 import {worker} from "./main";
+import {runStarfield} from "starfield-webgl";
+
+
+(() => {
+    runStarfield({
+    });
+})();
 
 
 export function initWorker() {
@@ -48,6 +55,8 @@ export function initWorker() {
 function handleLoadGraph(success, error, result) {
     if (success) {
         hideSpinner();
+        document.getElementById('map')?.classList.add('visible');
+        document.getElementById('pane-container')?.classList.add('visible');
         state.graph = result.graphStats;
         if (result.doStore) {
             worker.postMessage({
