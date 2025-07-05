@@ -1,5 +1,5 @@
-import wdk from 'https://esm.sh/wikidata-sdk';
-import Dexie from 'https://esm.sh/dexie@3.2.2';
+import wdk from 'wikidata-sdk';
+import Dexie from 'dexie';
 import * as turf from "@turf/turf";
 import {filterAndClassifyTypes} from "./worker-ports-filter";
 
