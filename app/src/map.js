@@ -44,17 +44,24 @@ export function initMap() {
             '#c1dbea'
         );
 
-        const queryString = await initPortsWorker();
-        const wikidataQueryURL = `https://query.wikidata.org/#${encodeURIComponent(queryString)}`;
+        (async function loadAndClusterPorts() {
+            try {
+                const queryString = await initPortsWorker();
+                const wikidataQueryURL = `https://query.wikidata.org/#${encodeURIComponent(queryString)}`;
+                const portsGeojson = await getPortsGeoJSON([west, south, east, north]);
 
-        const portsGeojson = await getPortsGeoJSON([west, south, east, north]);
-        console.debug(`Loaded ${portsGeojson.features.length} ports in AOI bounds.`, portsGeojson);
-        await clusterPoints(
-            portsGeojson,
-            state.map,
-            'ports',
-            `Ports: <a target="_blank" href="${wikidataQueryURL}">Wikidata</a>`,
-        );
+                console.debug(`Loaded ${portsGeojson.features.length} ports in AOI bounds.`, portsGeojson);
+
+                await clusterPoints(
+                    portsGeojson,
+                    state.map,
+                    'ports',
+                    `Ports: <a target="_blank" href="${wikidataQueryURL}">Wikidata</a>`
+                );
+            } catch (err) {
+                console.error('Failed to load or cluster ports:', err);
+            }
+        })();
 
         // Draw AOI bounds on the map
         const boundsGeojson = {
