@@ -16,7 +16,8 @@
     "msgpack-lite": "^0.1.26",
     "pako": "^2.1.0",
     "proj4": "^2.16.1",
-    "tweakpane": "^3.1.4"
+    "tweakpane": "^3.1.4",
+    "wikibase-sdk": "^10.2.3"
   },
   "devDependencies": {
     "vite": "^5.0.0"

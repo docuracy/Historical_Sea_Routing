@@ -3,10 +3,11 @@
 import $ from 'jquery';
 import maplibregl from 'maplibre-gl';
 import {state} from "./state";
-import {h3ToLngLat, polygons, showToast} from "./utils";
+import {h3ToLngLat, showToast} from "./utils";
 import {computeRoutes} from "./router";
 import {stopMonthCycle, updateRouteLegLogs} from "./quarterdeck";
 import {worker} from "./main";
+import {clusterPoints, getPortsGeoJSON, initPortsWorker, polygons} from "./map-utils";
 
 export function initMap() {
     state.map = new maplibregl.Map({
@@ -41,6 +42,18 @@ export function initMap() {
             'viabundus-water',
             'Water c.1500: Holterman/<a target="_blank" href="https://www.landesgeschichte.uni-goettingen.de/handelsstrassen/info.php">Viabundus</a>',
             '#c1dbea'
+        );
+
+        const queryString = await initPortsWorker();
+        const wikidataQueryURL = `https://query.wikidata.org/#${encodeURIComponent(queryString)}`;
+
+        const portsGeojson = await getPortsGeoJSON([west, south, east, north]);
+        console.debug(`Loaded ${portsGeojson.features.length} ports in AOI bounds.`, portsGeojson);
+        await clusterPoints(
+            portsGeojson,
+            state.map,
+            'ports',
+            `Ports: <a target="_blank" href="${wikidataQueryURL}">Wikidata</a>`,
         );
 
         // Draw AOI bounds on the map

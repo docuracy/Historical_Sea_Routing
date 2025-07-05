@@ -66,13 +66,13 @@ function handleLoadGraph(success, error, result) {
 }
 
 export function showSpinner(message = "Loading…") {
-    $("#spinner-text").text(message);
+    $("#spinner-text").html(message);
     $("#spinner-overlay").fadeIn(200);
 }
 
 
 export function updateSpinnerText(message) {
-    $("#spinner-text").text(message);
+    $("#spinner-text").html(message);
 }
 
 
@@ -101,14 +101,6 @@ export function h3ToLngLat(h3Index) {
     const [lat, lng] = h3.cellToLatLng(h3Index);
     return [lng, lat];
 }
-
-
-// export function interpolate(p0, p1, denom, w1, w2) {
-//     return [
-//         (w1 * p0[0] + w2 * p1[0]) / denom,
-//         (w1 * p0[1] + w2 * p1[1]) / denom
-//     ];
-// }
 
 
 export function polygons(url, map, sourceName, attribution, colour = 'red', opacity = 1, outline = false) {
@@ -165,6 +157,8 @@ export async function loadMetadata(defaultAOI = "Europe") {
 
     state.metadata = await res.json();
     state.isMobileDevice = isMobileDevice();
+
+    updateSpinnerText(`Loading ${state.metadata.node_count.toLocaleString()} nodes for <i>${state.aoi}</i>...`);
 }
 
 

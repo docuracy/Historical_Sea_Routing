@@ -32,6 +32,7 @@ export const state = {
     routeBounds: null,
     routeColours: ['orange', 'pink'],
     routeGeoJSON: null,
+    showPorts: true,
 
     // UI
     monthCycleInterval: null,

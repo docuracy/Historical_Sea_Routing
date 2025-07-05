@@ -75,6 +75,10 @@ export function initDeck() {
         label: 'Include Return',
     });
 
+    const portToggle = rootFolder.addInput(state, 'showPorts', {
+        label: 'Show Ports',
+    });
+
     // Create a folder with a title and make it collapsible
     const numericFolder = rootFolder.addFolder({
         title: 'Vessel & Voyage Parameters',
@@ -152,6 +156,22 @@ export function initDeck() {
                 reComputeRouteIfReady();
             }
         });
+    });
+
+    portToggle.on('change', (ev) => {
+        const visible = ev.value ? 'visible' : 'none';
+
+        const portLayerPrefix = 'ports-';
+        const allLayers = state.map.getStyle().layers || [];
+
+        allLayers
+            .map(layer => layer.id)
+            .filter(id => id.startsWith(portLayerPrefix))
+            .forEach(layerId => {
+                if (state.map.getLayer(layerId)) {
+                    state.map.setLayoutProperty(layerId, 'visibility', visible);
+                }
+            });
     });
 
     const year = new Date().getFullYear();

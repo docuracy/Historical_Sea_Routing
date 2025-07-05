@@ -1,4 +1,4 @@
-# Historical Sailing Routes
+# Historical Sea Routing
 
 This repository provides an interactive web-based tool for exploring historical sailing routes using environmental data
 and graph-based routing algorithms. It combines spatial and temporal environmental datasets to estimate plausible
