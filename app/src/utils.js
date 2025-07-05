@@ -1,6 +1,5 @@
 // utils.js
 
-import $ from 'jquery';
 import * as h3 from "h3-js";
 import {stopMonthCycle} from "./quarterdeck";
 import {state} from "./state";
@@ -65,28 +64,35 @@ function handleLoadGraph(success, error, result) {
     }
 }
 
-export function showSpinner(message = "Loading…") {
-    $("#spinner-text").html(message);
-    $("#spinner-overlay").fadeIn(200);
-}
-
-
 export function updateSpinnerText(message) {
-    $("#spinner-text").html(message);
+    const text = document.getElementById("spinner-text");
+    if (text) text.innerHTML = message;
 }
 
+export function showSpinner(message = "Loading…") {
+    updateSpinnerText(message);
+    document.getElementById("spinner-overlay")?.classList.add('visible');
+}
 
 export function hideSpinner() {
-    $("#spinner-overlay").fadeOut(200);
+    document.getElementById("spinner-overlay")?.classList.remove('visible');
 }
 
 
 export function showToast(message, duration = 3000) {
-    const $toast = $('<div class="toast-message"></div>').text(message);
-    $('body').append($toast);
-    $toast.fadeIn(400);
+    const toast = document.createElement('div');
+    toast.className = 'toast-message';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    // Trigger fade in
+    requestAnimationFrame(() => {
+        toast.classList.add('show');
+    });
+
     setTimeout(() => {
-        $toast.fadeOut(400, () => $toast.remove());
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 400); // match transition duration
     }, duration);
 }
 

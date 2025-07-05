@@ -17,6 +17,7 @@ export function handleComputeRoute(success, error, result) {
         console.error(`❌ Failed to compute route: ${error}`);
         showToast(`Could not compute route: ${error}`);
     }
+    state.instructions.element.querySelector('button').textContent = 'Pick two Points';
 }
 
 

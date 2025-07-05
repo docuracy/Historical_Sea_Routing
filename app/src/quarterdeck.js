@@ -1,6 +1,5 @@
 // quarterdeck.js
 
-import $ from 'jquery';
 import {state} from "./state";
 import {reComputeRouteIfReady} from "./router";
 import {getVesselConfig} from "./sailing_vessels";
@@ -31,13 +30,15 @@ export function initDeck() {
         title: 'Options',
         expanded: state.openOptions,
     });
-    const $gearIcon = $('<span class="folder-icon">').html(`
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-             width="14" height="14" style="margin-right:-6px; vertical-align:middle;">
-            <path fill="currentColor" d="M19.14,12.94c0.04,-0.31 0.06,-0.63 0.06,-0.94s-0.02,-0.63 -0.06,-0.94l2.03,-1.58c0.18,-0.14 0.23,-0.41 0.12,-0.62l-1.92,-3.32c-0.11,-0.2 -0.35,-0.28 -0.56,-0.22l-2.39,0.96c-0.5,-0.38 -1.05,-0.7 -1.65,-0.94l-0.36,-2.54c-0.03,-0.22 -0.22,-0.39 -0.44,-0.39h-3.84c-0.22,0 -0.41,0.16 -0.44,0.39l-0.36,2.54c-0.6,0.24 -1.16,0.56 -1.65,0.94l-2.39,-0.96c-0.21,-0.06 -0.45,0.02 -0.56,0.22l-1.92,3.32c-0.11,0.21 -0.06,0.48 0.12,0.62l2.03,1.58c-0.04,0.31 -0.06,0.63 -0.06,0.94s0.02,0.63 0.06,0.94l-2.03,1.58c-0.18,0.14 -0.23,0.41 -0.12,0.62l1.92,3.32c0.11,0.2 0.35,0.28 0.56,0.22l2.39,-0.96c0.5,0.38 1.05,0.7 1.65,0.94l0.36,2.54c0.03,0.22 0.22,0.39 0.44,0.39h3.84c0.22,0 0.41,-0.16 0.44,-0.39l0.36,-2.54c0.6,-0.24 1.16,-0.56 1.65,-0.94l2.39,0.96c0.21,0.06 0.45,-0.02 0.56,-0.22l1.92,-3.32c0.11,-0.21 0.06,-0.48 -0.12,-0.62l-2.03,-1.58ZM12,15.5c-1.93,0 -3.5,-1.57 -3.5,-3.5s1.57,-3.5 3.5,-3.5s3.5,1.57 3.5,3.5s-1.57,3.5 -3.5,3.5Z"/>
+
+    const gearIcon = document.createElement('span');
+    gearIcon.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="folder-icon gear">
+          <path d="M19.14,12.94c0.04,-0.31 0.06,-0.63 0.06,-0.94s-0.02,-0.63 -0.06,-0.94l2.03,-1.58c0.18,-0.14 0.23,-0.41 0.12,-0.62l-1.92,-3.32c-0.11,-0.2 -0.35,-0.28 -0.56,-0.22l-2.39,0.96c-0.5,-0.38 -1.05,-0.7 -1.65,-0.94l-0.36,-2.54c-0.03,-0.22 -0.22,-0.39 -0.44,-0.39h-3.84c-0.22,0 -0.41,0.16 -0.44,0.39l-0.36,2.54c-0.6,0.24 -1.16,0.56 -1.65,0.94l-2.39,-0.96c-0.21,-0.06 -0.45,0.02 -0.56,0.22l-1.92,3.32c-0.11,0.21 -0.06,0.48 0.12,0.62l2.03,1.58c-0.04,0.31 -0.06,0.63 -0.06,0.94s0.02,0.63 0.06,0.94l-2.03,1.58c-0.18,0.14 -0.23,0.41 -0.12,0.62l1.92,3.32c0.11,0.2 0.35,0.28 0.56,0.22l2.39,-0.96c0.5,0.38 1.05,0.7 1.65,0.94l0.36,2.54c0.03,0.22 0.22,0.39 0.44,0.39h3.84c0.22,0 0.41,-0.16 0.44,-0.39l0.36,-2.54c0.6,-0.24 1.16,-0.56 1.65,-0.94l2.39,0.96c0.21,0.06 0.45,-0.02 0.56,-0.22l1.92,-3.32c0.11,-0.21 0.06,-0.48 -0.12,-0.62l-2.03,-1.58ZM12,15.5c-1.93,0 -3.5,-1.57 -3.5,-3.5s1.57,-3.5 3.5,-3.5s3.5,1.57 3.5,3.5s-1.57,3.5 -3.5,3.5Z"/>
         </svg>
-    `);
-    $(rootFolder.element).find('.tp-fldv_t').prepend($gearIcon);
+    `;
+    const folderTitleEl = rootFolder.element.querySelector('.tp-fldv_t');
+    if (folderTitleEl) folderTitleEl.prepend(gearIcon);
 
 
     // Vessel type dropdown
@@ -92,10 +93,12 @@ export function initDeck() {
     });
 
     state.instructions = state.pane.addButton({title: 'Pick two Points'});
-    $(state.instructions.element).find('button').css({
-        backgroundColor: '#ccff00', color: 'black',
-        cursor: 'default',
-    });
+    const instructionsButton = state.instructions.element.querySelector('button');
+    if (instructionsButton) {
+        instructionsButton.style.backgroundColor = '#ccff00';
+        instructionsButton.style.color = 'black';
+        instructionsButton.style.cursor = 'default';
+    }
 
     // Listen for changes on vesselType to update numeric parameters
     vesselTypeInput.on('change', (ev) => {
@@ -174,16 +177,16 @@ export function initDeck() {
             });
     });
 
+    const credit = document.createElement('span');
+    credit.id = 'credit';
     const year = new Date().getFullYear();
-    const $credit = $(`
-      <span id="credit">
+    credit.innerHTML = `
         © ${year} Stephen Gadd | 
         <a href="https://github.com/docuracy/Historical_Sea_Routing" target="_blank" rel="noopener noreferrer">
           About
-        </a> 
-      </span>
-    `);
-    $('#pane-container').append($credit);
+        </a>
+    `;
+    document.getElementById('pane-container').appendChild(credit);
 
 }
 
@@ -238,7 +241,7 @@ export function updateRouteLegLogs(featureCollection = null) {
 
     // Remove all existing route leg folders
     if (!featureCollection) {
-        return
+        return;
     }
 
     const logs = [...featureCollection.features]
@@ -259,22 +262,22 @@ export function updateRouteLegLogs(featureCollection = null) {
             expanded: state.openLogs,
         });
 
-        const $titleEl = $(folder.element).find('.tp-fldv_t');
-        if ($titleEl.length) {
-            const $swatch = $('<span>').css({
-                display: 'inline-block',
-                width: '12px',
-                height: '12px',
-                background: log.properties?.layer?.colour,
-                'border-radius': '2px',
-                'margin-right': '6px',
-                'vertical-align': 'middle',
-            });
-            $titleEl.prepend($swatch);
+        const titleEl = folder.element.querySelector('.tp-fldv_t');
+        if (titleEl) {
+            const swatch = document.createElement('span');
+            swatch.style.display = 'inline-block';
+            swatch.style.width = '12px';
+            swatch.style.height = '12px';
+            swatch.style.background = log.properties?.layer?.colour || 'transparent';
+            swatch.style.borderRadius = '2px';
+            swatch.style.marginRight = '6px';
+            swatch.style.verticalAlign = 'middle';
+            titleEl.prepend(swatch);
         }
 
-        $(folder.element).on('click', (e) => {
-            state.openLogs = $(e.target).closest('.tp-fldv').hasClass('tp-fldv-expanded');
+        folder.element.addEventListener('click', (e) => {
+            const fldv = e.target.closest('.tp-fldv');
+            state.openLogs = fldv?.classList.contains('tp-fldv-expanded') ?? false;
         });
 
         // Add logs as text monitors
@@ -289,15 +292,19 @@ export function updateRouteLegLogs(featureCollection = null) {
     });
 
     state.geoJsonButton = state.pane.addButton({title: 'Download GeoJSON'});
-    const $icon = $('<span>').html(`
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                 width="14" height="14" style="margin-right:-6px; vertical-align:middle;">
-                <path d="M5 20h14v-2H5v2zm7-18v12l4-4h-3V4h-2v6H8l4 4V2z" fill="currentColor"/>
-            </svg>
-        `);
-    $(state.geoJsonButton.element)
-        .attr('title', 'Includes all parameters, data source references, and route logs too!')
-        .find('.tp-btnv_t').prepend($icon);
+    if (state.geoJsonButton) {
+        state.geoJsonButton.element.setAttribute('title', 'Includes all parameters, data source references, and route logs too!');
+
+        const icon = document.createElement('span');
+        icon.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="folder-icon">
+            <path d="M5 20h14v-2H5v2zm7-18v12l4-4h-3V4h-2v6H8l4 4V2z"/>
+          </svg>
+        `;
+
+        const btnTextSpan = state.geoJsonButton.element.querySelector('.tp-btnv_t');
+        if (btnTextSpan) btnTextSpan.prepend(icon);
+    }
     state.geoJsonButton.on('click', downloadGeoJson);
     state.routeGeoJSON = featureCollection; // Store the route GeoJSON in state
 

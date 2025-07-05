@@ -1,6 +1,5 @@
 // main.js
 
-import $ from 'jquery';
 import {initWorker, loadMetadata} from './utils'
 import {initMap} from './map';
 import {initDeck} from './quarterdeck';
@@ -9,7 +8,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 export let worker;
 
-$(async () => {
+window.addEventListener('DOMContentLoaded', async () => {
     await loadMetadata();
     await initVesselPresets();
     await initDeck(); // Required by initMap

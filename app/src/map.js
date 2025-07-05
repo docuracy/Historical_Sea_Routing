@@ -1,6 +1,5 @@
 // map.js
 
-import $ from 'jquery';
 import maplibregl from 'maplibre-gl';
 import {state} from "./state";
 import {h3ToLngLat, showToast} from "./utils";
@@ -94,7 +93,7 @@ export function initMap() {
             });
         }
 
-        $('#map').addClass('visible');
+        document.getElementById('map')?.classList.add('visible');
     });
 
     state.map.on('click', async (e) => {
@@ -136,14 +135,13 @@ export function handleFindClosestNode(success, error, result) {
             addPointMarker(closestNodeLngLat, '#00FF00', true); // Green for start
             state.selectingStart = false;
             clearRoute(); // Clear previous route
-            $(state.instructions.element).find('button').text('Pick Destination');
+            state.instructions.element.querySelector('button').textContent = 'Pick Destination';
         } else {
             state.endPointH3 = closestNodeH3;
             addPointMarker(closestNodeLngLat, '#FF0000', false); // Red for end
             state.selectingStart = true; // Reset for next selection cycle
-            $(state.instructions.element).find('button').text('Computing Route...');
+            state.instructions.element.querySelector('button').innerHTML = '<i>Computing Route...</i>';
             computeRoutes();
-            $(state.instructions.element).find('button').text('Pick two Points');
         }
         state.closestNodeH3 = result;
     } else {
