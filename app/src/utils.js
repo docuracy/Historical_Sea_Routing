@@ -75,6 +75,9 @@ function handleLoadGraph(success, error, result) {
 
 export function updateSpinnerText(message) {
     const text = document.getElementById("spinner-text");
+    if (text && text.dataset.basetext) {
+        message = `${text.dataset.basetext} ${message}`;
+    }
     if (text) text.innerHTML = message;
 }
 
