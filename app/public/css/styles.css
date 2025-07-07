@@ -4,6 +4,26 @@ body, html {
     height: 100vh;
     font-family: Roboto Mono, Source Code Pro, Menlo, Courier, monospace;
     overflow: hidden;
+    color: #d2c7c2;
+}
+
+#logo {
+    font-size: 3em;
+}
+
+body > #logo {
+    font-size: 1em;
+    position: fixed;
+    bottom: 1rem;
+    left: 1rem;
+    z-index: 1000;
+}
+
+#logo span {
+    font-family: "UnifrakturMaguntia", cursive;
+    font-weight: 400;
+    font-style: normal;
+    font-size: 1.5em;
 }
 
 #map {
@@ -163,11 +183,14 @@ body, html {
 }
 
 @keyframes swing {
-    0%   { transform: rotate(-30deg); }
-    100% { transform: rotate(30deg); }
+    0% {
+        transform: rotate(-30deg);
+    }
+    100% {
+        transform: rotate(30deg);
+    }
 }
 
 #spinner-text {
     font-size: 1.1em;
-    color: #d2c7c2;
 }

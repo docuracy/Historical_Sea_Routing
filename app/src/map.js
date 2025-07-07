@@ -1,6 +1,7 @@
 // map.js
 
 import maplibregl from 'maplibre-gl';
+import * as pmtiles from 'pmtiles';
 import {state} from "./state";
 import {h3ToLngLat, showToast} from "./utils";
 import {computeRoutes} from "./router";
@@ -8,13 +9,75 @@ import {stopMonthCycle, updateRouteLegLogs} from "./quarterdeck";
 import {worker} from "./main";
 import {clusterPoints, getPortsGeoJSON, initPortsWorker, polygons} from "./map-utils";
 
+const protocol = new pmtiles.Protocol();
+maplibregl.addProtocol('pmtiles', protocol.tile);
+
+const seaColour = '#0b3b53';
+const landColour = '#849552';
+
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, ''); // remove trailing slash
+const sourceUrlZ8 = `pmtiles://${baseUrl}/data/osm-coastlines-z8.pmtiles`;
+const sourceUrlZ9 = `pmtiles://${baseUrl}/data/osm-coastlines-z9.pmtiles`;
+
+const style = {
+    version: 8,
+    glyphs: `${import.meta.env.BASE_URL}fonts/{fontstack}/{range}.pbf`,
+    sources: {
+        coastlinesZ8: {
+            type: 'vector',
+            url: sourceUrlZ8,
+            promoteId: 'id',
+            maxzoom: 9
+        },
+        coastlinesZ9: {
+            type: 'vector',
+            url: sourceUrlZ9,
+            promoteId: 'id',
+            minzoom: 9,
+        },
+    },
+    layers: [
+        {
+            id: 'sea-background',
+            type: 'background',
+            paint: {
+                'background-color': seaColour,
+            }
+        },
+        {
+            id: 'coastlines-low',
+            type: 'fill',
+            source: 'coastlinesZ8',
+            'source-layer': 'coastlines',
+            minzoom: 0,
+            maxzoom: 9,
+            paint: {
+                'fill-color': landColour,
+                'fill-opacity': 0.7
+            }
+        },
+        {
+            id: 'coastlines-medium',
+            type: 'fill',
+            source: 'coastlinesZ9',
+            'source-layer': 'coastlines',
+            minzoom: 9,
+            paint: {
+                'fill-color': landColour,
+                'fill-opacity': 0.7
+            }
+        },
+    ]
+};
+
 export function initMap() {
     state.map = new maplibregl.Map({
         container: 'map',
-        style: 'https://tiles.whgazetteer.org/styles/whg-basic-light/style.json',
+        // style: 'https://tiles.whgazetteer.org/styles/whg-basic-light/style.json',
+        style: style,
         zoom: 6,
         attributionControl: {
-            customAttribution: 'Map Tiles: <a target="_blank" href="https://whgazetteer.org">World Historical Gazetteer</a>',
+            customAttribution: 'Map Tiles: <a target="_blank" href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
             compact: true
         },
         center: [state.metadata.bounds.west + (state.metadata.bounds.east - state.metadata.bounds.west) / 2,
@@ -40,7 +103,7 @@ export function initMap() {
             state.map,
             'viabundus-water',
             'Water c.1500: Holterman/<a target="_blank" href="https://www.landesgeschichte.uni-goettingen.de/handelsstrassen/info.php">Viabundus</a>',
-            '#c1dbea'
+            seaColour,
         );
 
         (async function loadAndClusterPorts() {
