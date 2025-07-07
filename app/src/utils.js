@@ -10,8 +10,7 @@ import {runStarfield} from "starfield-webgl";
 
 
 (() => {
-    runStarfield({
-    });
+    runStarfield({});
 })();
 
 
@@ -53,32 +52,75 @@ export function initWorker() {
 
 
 function handleLoadGraph(success, error, result) {
-    if (success) {
-        hideSpinner();
-        document.getElementById('map')?.classList.add('visible');
-        document.getElementById('pane-container')?.classList.add('visible');
-        state.graph = result.graphStats;
-        if (result.doStore) {
-            worker.postMessage({
-                type: 'store-graph',
-                payload: {
-                    graphId: `routing_graph_${state.aoi}`,
-                }
+    if (!success) {
+        console.error(result, error);
+        return;
+    }
+
+    // If instructions should be shown and haven't been dismissed yet
+    const shouldShowInstructions = localStorage.getItem("hideInstructions") !== "true";
+
+    if (shouldShowInstructions) {
+        // Show the spinner message with instructions and defer execution
+        updateSpinnerText("Loading completed.", true);
+
+        // Wait for the user to click the dismiss button before proceeding
+        const dismissBtn = document.getElementById("dismiss-instructions");
+        if (dismissBtn) {
+            dismissBtn.addEventListener("click", () => {
+                localStorage.setItem("hideInstructions", "true");
+                proceedWithSuccess(result);
             });
         }
-        console.info(result.message);
-        console.info(`Graph has ${result.graphStats.nodeCount} nodes and ${result.graphStats.edgeCount} edges.`);
     } else {
-        console.error(result, error);
+        // Proceed immediately if instructions are already hidden
+        proceedWithSuccess(result);
     }
 }
 
-export function updateSpinnerText(message) {
+
+function proceedWithSuccess(result) {
+    hideSpinner();
+    document.getElementById('map')?.classList.add('visible');
+    document.getElementById('pane-container')?.classList.add('visible');
+    state.graph = result.graphStats;
+
+    if (result.doStore) {
+        worker.postMessage({
+            type: 'store-graph',
+            payload: {
+                graphId: `routing_graph_${state.aoi}`,
+            }
+        });
+    }
+
+    console.info(result.message);
+    console.info(`Graph has ${result.graphStats.nodeCount} nodes and ${result.graphStats.edgeCount} edges.`);
+}
+
+
+export function updateSpinnerText(message, includeInstructions = false) {
+    if (localStorage.getItem("hideInstructions") === "true") {
+        includeInstructions = false;
+    }
     const text = document.getElementById("spinner-text");
     const logoHTML = document.getElementById("logo")?.outerHTML || '';
     if (text && logoHTML) {
         message = `${logoHTML}</br>${message}`;
     }
+
+    // Append instructions box if needed
+    if (includeInstructions) {
+        const instructionsHTML = `
+            <div id="instructions">
+                This tool estimates plausible historical sailing routes based on vessel type and environmental conditions.<br><br>
+                <b>NOTE:</b> The journey time estimates are as yet <i>very</i> inaccurate and should not be relied upon or quoted!<br>
+                <button id="dismiss-instructions" style="margin-top: 0.5em;">Don't show this again</button>
+            </div>
+        `;
+        message += instructionsHTML;
+    }
+
     if (text) text.innerHTML = message;
 }
 
@@ -177,7 +219,7 @@ export async function loadMetadata(defaultAOI = "Europe") {
     state.metadata = await res.json();
     state.isMobileDevice = isMobileDevice();
 
-    updateSpinnerText(`Loading ${state.metadata.node_count.toLocaleString()} nodes for <i>${state.aoi}</i>...`);
+    updateSpinnerText(`Loading ${state.metadata.node_count.toLocaleString()} nodes for <i>${state.aoi}</i>...`, true);
 }
 
 
