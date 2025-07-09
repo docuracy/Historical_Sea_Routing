@@ -106,18 +106,12 @@ export function initDeck() {
         label: 'Show Ports',
     });
 
-    const distanceUnitInput = rootFolder.addInput(state.vesselParameters, 'distanceUnit', {
+    rootFolder.addInput(state.vesselParameters, 'distanceUnit', {
         options: Object.fromEntries(
             Object.entries(DISTANCE_UNITS).map(([key, {label}]) => [label, key])
         ),
         label: 'Distance Unit',
     });
-
-    // distanceUnitInput.on('change', () => {
-    //     if (!state.isProgrammaticChange) {
-    //         reComputeRouteIfReady();
-    //     }
-    // });
 
     // Create a folder with a title and make it collapsible
     const numericFolder = rootFolder.addFolder({
@@ -128,6 +122,8 @@ export function initDeck() {
     // Add sliders/inputs for all numeric parameters
     const numericInputs = {};
     Object.keys(defaultVesselConfig).forEach((key) => {
+        // Exclude 'vesselType', 'month', 'play', 'return', 'showPorts', and 'distanceUnit'
+        if (['vesselType', 'month', 'play', 'return', 'showPorts', 'distanceUnit'].includes(key)) return;
         numericInputs[key] = numericFolder.addInput(state.vesselParameters, key);
     });
 
