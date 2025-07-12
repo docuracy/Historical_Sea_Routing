@@ -2,10 +2,9 @@ from datetime import date
 from pathlib import Path
 
 # Define output directory
-head_directory = Path(__file__).resolve().parent.parent
-copernicus_data_directory = head_directory / "process" / "data" / "copernicus"
+head_directory = Path(__file__).resolve().parent.parent.parent
+copernicus_data_directory = head_directory / "process" / "geo" / "data" / "copernicus"
 copernicus_data_directory.mkdir(parents=True, exist_ok=True)
-screenshots_directory = head_directory / "screenshots"
 
 # Define areas of interest (AOIs) with their geographical bounds
 AOIS = [
@@ -33,42 +32,30 @@ datasets = {
             "sea floor depth": "deptho"
         }
     },
-    "wind_monthly": {
+    "Wind": {
         "doi": "https://doi.org/10.48670/moi-00181",
         "resolution_degrees": 0.25,
         "dataset_id": "cmems_obs-wind_glo_phy_my_l4_P1M",
-        "date_range": ("2023-01-01T00:00:00", "2025-01-01T00:00:00"),
+        "date_range": ("1995-01-01", "2005-01-01"),
         "variables": {
-            "eastward wind sdd": "eastward_wind_sdd",
-            "northward wind sdd": "northward_wind_sdd"
+            "eastward wind": "eastward_wind",
+            "northward wind": "northward_wind"
         }
     },
-    "wind_hourly": {
-        "doi": "https://doi.org/10.48670/moi-00185",
-        "resolution_degrees": 0.125,
-        "dataset_id": "cmems_obs-wind_glo_phy_my_l4_0.125deg_PT1H",
-        "max_full_year_date_range": ("1995-01-01", "2025-01-01"),
-        "date_range": ("2023-01-01T00:00:00", "2025-01-01T00:00:00"),
-        "variables": {
-            "eastward wind": "eastward_wind",  # Dropped following correlation analysis
-            "northward wind": "northward_wind"  # Dropped following correlation analysis
-        }
-    },
-    "waves_hourly": {
+    "Waves": {
         "doi": "https://doi.org/10.48670/moi-00017",
         "resolution_degrees": 0.083,  # This is significantly higher resolution than the ERA5 dataset (0.5 degrees)
         "dataset_id": "cmems_mod_glo_wav_anfc_0.083deg_PT3H-i",
-        "max_full_year_date_range": ("2023-01-01", "2025-01-01"),  # Only two complete years currently available (June 2025)
-        "date_range": ("2023-01-01T00:00:00", "2025-01-01T00:00:00"),
+        "date_range": ("2023-01-01", "2025-01-01"),  # Only two complete years currently available (June 2025)
         "variables": {
-            "stokes drift x velocity": "VSDX",  # Dropped following correlation analysis
-            "stokes drift y velocity": "VSDY",  # Dropped following correlation analysis
-            "wind wave from direction": "VMDR_WW",  # Used in computation of component vectors
-            "wind wave mean period": "VTM01_WW",  # Dropped following correlation analysis
-            "wind wave significant height": "VHM0_WW",  # Used in computation of component vectors
-            "primary swell wave from direction": "VMDR_SW1",  # Used in computation of component vectors
-            "primary swell wave mean period": "VTM01_SW1",  # Dropped following correlation analysis
-            "primary swell wave significant height": "VHM0_SW1",  # Used in computation of component vectors
+            "stokes drift x velocity": "VSDX",
+            "stokes drift y velocity": "VSDY",
+            "wind wave from direction": "VMDR_WW",
+            "wind wave mean period": "VTM01_WW",
+            "wind wave significant height": "VHM0_WW",
+            "primary swell wave from direction": "VMDR_SW1",
+            "primary swell wave mean period": "VTM01_SW1",
+            "primary swell wave significant height": "VHM0_SW1",
         }
     },
     "Weather": {

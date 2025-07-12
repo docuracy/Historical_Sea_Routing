@@ -289,17 +289,17 @@ def main():
     AOI_index = 0  # Index of the AOI to use, can be changed or passed via CLI
     bbox = list(AOIS[AOI_index]["bounds"])  # Use Europe bounding box
 
-    # downloaded_files = []
-    # for dataset_name, dataset_info in datasets.items():
-    #     if dataset_name in ["Weather"]:
-    #         download_era5_dataset(dataset_name, bbox)
-    #     else:
-    #         output_file = download_marine_dataset(dataset_name, dataset_info, bbox)
-    #         if output_file:
-    #             downloaded_files.append((output_file, dataset_name))
-    #
-    # for output_file, dataset_name in downloaded_files:
-    #     compute_temporal_averages(output_file, dataset_name)
+    downloaded_files = []
+    for dataset_name, dataset_info in datasets.items():
+        if dataset_name in ["Weather"]:
+            download_era5_dataset(dataset_name, bbox)
+        else:
+            output_file = download_marine_dataset(dataset_name, dataset_info, bbox)
+            if output_file:
+                downloaded_files.append((output_file, dataset_name))
+
+    for output_file, dataset_name in downloaded_files:
+        compute_temporal_averages(output_file, dataset_name)
 
     convert_netcdf_to_zarr(
         datasets=datasets,

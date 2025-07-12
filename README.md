@@ -52,6 +52,8 @@ browser.
 
 ### Preprocessing
 
+#### Geospatial Data Infrastructure
+
 ![Screenshot 2: Multi-Resolution Hex Grid](/screenshots/hex_grid.png)  
 This project leverages the [H3 hexagonal hierarchical spatial index](https://h3geo.org/) to create a multi-resolution
 grid system for
@@ -70,8 +72,7 @@ at the
 first visible landmass within the horizon radius. The efficiencies of this approach allow for rapid sight-line analysis
 without recourse to ray-casting.
 
-Modern meteorological data from the [Copernicus Climate Data Store](https://cds.climate.copernicus.eu/) are used to
-estimate historical attenuation of visibility due to fog and rain.
+#### Historical Geographic Data
 
 ![Screenshot 3: Viabundus Water](/screenshots/viabundus_water.png)
 
@@ -82,6 +83,141 @@ the
 project's [Water (1500)](https://www.landesgeschichte.uni-goettingen.de/handelsstrassen/data/Viabundus-2-water-1500.geojson)
 layer is applied in this way to mask land areas which have been reclaimed since the 16th century. A limitation is that
 no oceanographic data are deployed in route-weighting for such areas.
+
+#### Environmental Data
+
+Environmental data plays a central role in the routing algorithm, representing the dynamic natural forces that
+historically influenced maritime travel. Given the lack of detailed historical meteorological records, this project
+employs carefully selected modern datasets as proxies for premodern conditions.
+
+#### _Justification for Using Modern Environmental Data as a Proxy for Premodern Conditions_
+
+Direct meteorological observations from premodern periods are sparse and geographically limited. To address this, the
+model uses reanalysis and remote sensing data products to approximate past environmental conditions. Although climate
+systems evolve, large-scale wind and wave patterns tend to exhibit significant stability at seasonal and regional scales
+over decades and even centuries.
+
+By focusing on modal (most typical) conditions, rather than averages or extreme events, this approach aligns well with
+historical navigation needs:
+
+* Routing decisions were shaped by dominant environmental conditions, not isolated anomalies.
+
+* Modal climatologies highlight stable, recurring patterns that premodern mariners would have learned and exploited.
+
+* The spatial scale of the H3 hexagonal grid aligns with modern dataset resolution and the generalised nature of
+  historic vessel movement.
+
+This proxy-based strategy supports practical, historically grounded simulation of maritime routes.
+
+#### _Environmental Data Processing Overview_
+
+This project uses two datasets from the Copernicus Marine Service, accessible via DOI:
+
+* Wind and wave reanalysis: [WIND_GLO_PHY_L4_MY_012_006](https://doi.org/10.48670/moi-00185)
+* Wave model: [GLOBAL_ANALYSISFORECAST_WAV_001_027](https://doi.org/10.48670/moi-00017)
+
+The environmental processing pipeline reduces these high-resolution datasets into compact monthly modal composites,
+ensuring efficient lookup of dominant conditions at each graph node while preserving meteorologically meaningful
+information.
+
+Key steps include:
+
+* **Spatial Indexing:** Each H3 node is mapped to the nearest environmental data grid cell.
+
+* **Discretisation:** Continuous variables (e.g., wind speed, wave height) are binned into categorical intervals.
+
+* **Aggregation by Mode:** For each H3 cell and calendar month, the most frequently observed combination of binned
+  environmental conditions is computed across two years of hourly data (~1,460–1,500 samples/month/location).
+
+* **Optimised Storage:** The modal dataset is saved in compressed Zarr format for rapid access and scalability.
+
+This transformation replaces terabytes of raw hourly data with a streamlined and simulation-ready climatological model.
+
+#### _Correlation-Based Variable Reduction_
+
+To reduce dataset complexity without compromising environmental fidelity, correlation analysis was conducted on hourly
+data sampled from 1,000 randomly selected sea hexes.
+
+* **Vector Decomposition**
+
+  To enable meaningful comparisons and operations, wave magnitude and direction were converted into Cartesian vector
+  components:
+
+    ```math
+    u = -H × sin(θ)
+    v = -H × cos(θ)
+    ```
+
+  where _H_ is wave height and _θ_ is mean wave direction in radians. Components were derived for:
+
+    - Wind waves: ww_u, ww_v
+    - Swell waves: sw_u, sw_v
+
+  This representation enables correlation analysis and vector-based reasoning.
+
+
+* **Variable Elimination**
+
+  The resulting correlation matrix revealed several high-correlation pairs:
+
+  | Variable Pair                          | r           | Decision                      |
+              | -------------------------------------- | ----------- | ----------------------------- |
+  | Stokes Drift (`VSDX`, `VSDY`) vs. Wind | \~0.89–0.90 | Dropped                       |
+  | Wind wave height vs. period            | \~0.90      | Period dropped                |
+  | Wind vectors vs. Wave-derived vectors  | \~0.80–0.84 | Wind data dropped (see below) |
+
+![variable_correlation_clustermap.png](screenshots/variable_correlation_clustermap.png)
+
+#### _Wind Proxy via Regression_
+
+Given the strong linear relationship between wave-based and wind vector components, a regression model was used to
+derive wind vectors from wave data:
+
+* _eastward_wind ≈ β₀ + β₁ × ww_u_
+* _northward_wind ≈ β₀ + β₁ × ww_v_
+
+| Component | β₀       | β₁      |
+|-----------|----------|---------|
+| u         | -0.04379 | 0.96965 |
+| v         | -0.00858 | 0.95177 |
+
+These models provide highly accurate wind estimates from the higher-resolution wave fields, making them suitable
+substitutes.
+
+#### _Simplification Decision_
+
+Because:
+
+* The wind dataset is coarser in space and time, and
+* Wave-based proxies offer comparable explanatory power at higher fidelity,
+
+the wind dataset was removed from the pipeline entirely. This step improves performance and simplifies storage, while
+retaining key directional forcing information.
+
+#### _Modal Confidence and Validation_
+
+Each modal value is computed from a sample of ~1,460–1,500 hourly data points per month and location, representing two
+full years of observations.
+
+**Confidence Score:** Modal confidence is defined as the frequency ratio of the most common bin combination (i.e., the
+proportion of samples
+in a month that match the modal condition). A higher score indicates stronger recurrence of that condition.
+
+* High confidence in summer months suggests strong seasonality and environmental predictability.
+* Lower confidence in other months reflects greater variability, consistent with real-world
+  transitional weather.
+
+This validation confirms that modal routing inputs are most stable, and thus most reliable, during peak seasonal
+conditions.
+
+![modal_confidence_histogram.png](screenshots/modal_confidence_histogram.png)
+
+![modal_confidence_monthly_summary.png](screenshots/modal_confidence_monthly_summary.png)
+
+#### _Visibility Reduction_
+
+Modern meteorological data from the [Copernicus Climate Data Store](https://cds.climate.copernicus.eu/) are used to
+estimate historical attenuation of visibility due to fog and rain.
 
 ### Dynamic Processing
 

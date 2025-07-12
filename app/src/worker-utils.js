@@ -1,5 +1,5 @@
 import * as h3 from "h3-js";
-import {estimateSailingTime} from "./sailing";
+import {estimateSailingTime} from "./premodern-sailing";
 import dijkstra from "graphology-shortest-path/dijkstra";
 import * as turf from "@turf/turf";
 import maplibregl from "maplibre-gl";
@@ -163,18 +163,13 @@ function oneWayRoute(graph, source, target, vesselParameters, direction, colour)
         let sourceAttrs = graph.getSourceAttributes(edgeKey);
         let targetAttrs = graph.getTargetAttributes(edgeKey);
 
-        const temporalWeight = estimateSailingTime({
+        return estimateSailingTime({
             source: sourceAttrs,
             target: targetAttrs,
             edge: attributes,
             month: month,
             vesselParameters: vesselParameters,
         });
-
-        const bathymetry = (typeof targetAttrs.bathymetry === "number" && !isNaN(targetAttrs.bathymetry)) ? targetAttrs.bathymetry : 0;
-        const draughtMultiplier = bathymetry < vesselParameters.vesselDraughtWithTolerance ? 1000 : 1;
-
-        return temporalWeight * draughtMultiplier;
     };
 
     let pathNodeKeys;

@@ -2,7 +2,7 @@
 
 import {state} from "./state";
 import {reComputeRouteIfReady} from "./router";
-import {getVesselConfig} from "./sailing_vessels";
+import {getVesselConfig} from "./premodern-sailing";
 import * as Tweakpane from "tweakpane";
 import {downloadGeoJson, isMobileDevice} from "./utils";
 
@@ -31,11 +31,8 @@ export function initDeck() {
         }
     }
     if (!savedParams) {
-        // If no saved parameters, set defaults
-        const defaultVessel = 'default';
-        defaultVesselConfig = getVesselConfig(defaultVessel);
+        defaultVesselConfig = getVesselConfig();
         state.vesselParameters = {
-            vesselType: defaultVessel,
             month: 1,
             play: false,
             return: false,

@@ -94,6 +94,68 @@ coastline_lines = gpd.GeoDataFrame  # For coastline boundaries (LineStrings)
 coastline_tree = STRtree  # For land_flattened boundaries (LineStrings)
 
 
+def get_all_unique_h3_centroids_df():
+    """
+    Reads all 'hexes_rX' layers from the output GeoPackage, extracts unique H3 IDs
+    and their corresponding latitude and longitude coordinates, and returns them
+    as a Pandas DataFrame.
+
+    Returns:
+        pd.DataFrame: A DataFrame with columns 'h3_id', 'latitude', 'longitude'.
+                      Returns an empty DataFrame if no hex layers are found or processed.
+    """
+    logger.info("Extracting unique H3 IDs and centroids from all hex layers...")
+
+    all_h3_ids = set()
+    h3_centroid_map = {} # Maps h3_id to (lat, lon) tuple
+
+    # List all hexes_rX layers in the output GPKG
+    try:
+        layers_in_gpkg = fiona.listlayers(output_gpkg)
+    except fiona.errors.DriverError:
+        logger.error(f"GeoPackage file not found or corrupted: {output_gpkg}")
+        return pd.DataFrame(columns=['h3_id', 'latitude', 'longitude'])
+
+    hex_layers = sorted(
+        [layer for layer in layers_in_gpkg if layer.startswith("hexes_r")],
+        key=lambda x: int(x.split('_r')[1])
+    )
+
+    if not hex_layers:
+        logger.warning(f"No 'hexes_rX' layers found in {output_gpkg}. Cannot extract H3 centroids.")
+        return pd.DataFrame(columns=['h3_id', 'latitude', 'longitude'])
+
+    for layer_name in tqdm(hex_layers, desc="Processing H3 layers"):
+        try:
+            # Read the GeoDataFrame for the current layer
+            gdf = gpd.read_file(output_gpkg, layer=layer_name)
+
+            for _, row in gdf.iterrows():
+                h3_id = row['h3_id']
+                if h3_id not in all_h3_ids:
+                    all_h3_ids.add(h3_id)
+                    # h3.cell_to_latlng returns (lat, lon)
+                    lat, lon = h3.cell_to_latlng(h3_id)
+                    h3_centroid_map[h3_id] = (lat, lon)
+
+        except Exception as e:
+            logger.error(f"Error reading or processing layer {layer_name}: {e}")
+            continue
+
+    if not h3_centroid_map:
+        logger.warning("No H3 centroids extracted. DataFrame will be empty.")
+        return pd.DataFrame(columns=['h3_id', 'latitude', 'longitude'])
+
+    # Convert the map to a DataFrame
+    df = pd.DataFrame([
+        {'h3_id': h3_id, 'latitude': lat, 'longitude': lon}
+        for h3_id, (lat, lon) in h3_centroid_map.items()
+    ])
+
+    logger.info(f"Extracted {len(df)} unique H3 IDs and centroids.")
+    return df
+
+
 def build_trees(unified_land_gdf, flattened_land_gdf):
     global land_tree, flatland_tree, coastline_lines, coastline_tree
     global prepared_land, flatland_geoms, prepared_flatland_list, land_geoms, land_geom_index_map
