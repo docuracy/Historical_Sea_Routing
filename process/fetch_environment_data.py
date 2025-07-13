@@ -33,7 +33,7 @@ from sklearn.linear_model import LinearRegression
 from tqdm import tqdm
 
 from process.bin_utils import compute_all_bins_to_json, get_binned_data_for_components_dask
-from process.config import datasets, AOIS, copernicus_data_directory
+from process.config import datasets, AOIS, copernicus_data_directory, screenshots_directory
 from process.sea_graph import get_all_unique_h3_centroids_df
 
 # Suppress DEBUG logging from known libraries
@@ -381,7 +381,7 @@ def plot_correlation_heatmap(corr_matrix, title="Variable Correlation Clustermap
     g.ax_heatmap.set_yticklabels(g.ax_heatmap.get_yticklabels(), rotation=0)
     plt.title(title, y=1.05)
 
-    output_path = copernicus_data_directory / "figures" / (title.replace(" ", "_").lower() + ".png")
+    output_path = screenshots_directory / (title.replace(" ", "_").lower() + ".png")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     plt.savefig(output_path, bbox_inches="tight", dpi=300)
@@ -582,11 +582,11 @@ def main():
 
     sampled_data = run_correlation_analysis(hourly_datasets, drop_na=False)
 
-    wind_proxy_coefficients = compute_wind_proxy_coefficients(sampled_data)
-
-    bins = compute_all_bins_to_json()
-
-    create_modal_zarr_from_waves(bins)
+    # wind_proxy_coefficients = compute_wind_proxy_coefficients(sampled_data)
+    #
+    # bins = compute_all_bins_to_json()
+    #
+    # create_modal_zarr_from_waves(bins)
 
 
 if __name__ == "__main__":
