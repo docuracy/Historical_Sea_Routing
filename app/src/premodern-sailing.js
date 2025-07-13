@@ -150,6 +150,34 @@ const SailingMechanics = {
 
 // --- 3. MAIN ESTIMATE SAILING TIME FUNCTION ---
 
+function deriveProxyVectors(waveX, waveY) {
+    const { wind_beta0, wind_beta1, current_beta0, current_beta1 } = state.envProxyConstants;
+
+    const wind = {
+        x: wind_beta0 + wind_beta1 * waveX,
+        y: wind_beta0 + wind_beta1 * waveY
+    };
+
+    const current = {
+        x: current_beta0 + current_beta1 * waveX,
+        y: current_beta0 + current_beta1 * waveY
+    };
+
+    const currentSpeed = Math.hypot(current.x, current.y);
+    const currentDir = currentSpeed > 0
+        ? { x: current.x / currentSpeed, y: current.y / currentSpeed }
+        : { x: 0, y: 0 };
+
+    return {
+        wind,
+        current: {
+            ...current,
+            speed: currentSpeed,
+            dir: currentDir
+        }
+    };
+}
+
 /**
  * Estimates the sailing time of a medieval vessel between two nodes,
  * incorporating vessel dimensions, cargo, and varying environmental conditions.
@@ -212,39 +240,34 @@ export function estimateSailingTime(payload) {
 
 
     // --- ENVIRONMENTAL FACTORS ---
-    const windX = avgEnv('wind_x');
-    const windY = avgEnv('wind_y');
+
+    // Swell and wave vector components
+    const swellX = avgEnv('sw1_u'); // Replaces swell_x
+    const swellY = avgEnv('sw1_v');
+    const waveX = avgEnv('ww_u');   // Replaces wave_x
+    const waveY = avgEnv('ww_v');
+
+    const { wind, current } = deriveProxyVectors(waveX, waveY);
+
+    const windX = wind.x;
+    const windY = wind.y;
     const windSpeedTrue = Math.hypot(windX, windY);
-    const windDirTrue = windSpeedTrue > 0 ? {x: windX / windSpeedTrue, y: windY / windSpeedTrue} : {x: 0, y: 0};
 
-    const currentX = avgEnv('current_x');
-    const currentY = avgEnv('current_y');
-    const currentSpeed = Math.hypot(currentX, currentY);
-    const currentDir = currentSpeed > 0 ? {x: currentX / currentSpeed, y: currentY / currentSpeed} : {x: 0, y: 0};
+    const currentX = current.x;
+    const currentY = current.y;
+    const currentSpeed = current.speed;
+    const currentDir = current.dir;
 
+    // Wave heights
     const swellHeight = avgEnv('swell_height');
     const waveHeight = avgEnv('wave_height');
     const combinedWaveHeight = swellHeight + waveHeight;
 
-    // Simplified wave direction (prioritize swell, then wave, or default)
-    const swellX = avgEnv('swell_x');
-    const swellY = avgEnv('swell_y');
-    const waveX = avgEnv('wave_x');
-    const waveY = avgEnv('wave_y');
-
-    let waveAvgDir = {x: 0, y: 0};
-    const swellMag = Math.hypot(swellX, swellY);
-    const waveMag = Math.hypot(waveX, waveY);
-
-    if (swellMag > 0) {
-        waveAvgDir = {x: swellX / swellMag, y: swellY / swellMag};
-    } else if (waveMag > 0) {
-        waveAvgDir = {x: waveX / waveMag, y: waveY / waveMag};
-    } else {
-        // No significant wave or swell direction, assume following for minimal penalty/benefit
-        waveAvgDir = edgeDir; // As if waves are aligned with vessel direction
-    }
-
+    // Compute combined wave components
+    let x = swellX + waveX;
+    let y = swellY + waveY;
+    let mag = Math.hypot(x, y);
+    const waveAvgDir = mag > 0 ? { x: x / mag, y: y / mag } : { x: 0, y: 0 };
 
     // --- ITERATIVE SOLUTION FOR VESSEL SPEED (Speed Through Water) ---
     // We iterate to find the vessel's equilibrium speed where thrust balances resistance.
