@@ -399,6 +399,12 @@ def compute_wind_proxy_coefficients(sampled_ds):
     Returns:
       dict with keys 'u' and 'v' each mapping to (coef, intercept),
       or None if required variables are missing.
+
+    TODO:
+
+    This should compute four sets of coefficients:
+    1:
+
     """
     output_path = copernicus_data_directory / "wind_proxy_coefficients.json"
     if output_path.exists():
@@ -499,12 +505,12 @@ def sample_ds_at_centroids_with_indexer(ds, indexer, centroid_df, batch_size=100
             sampled_vars['sw_v'].append(sw_v)
 
     # Drop original vars used for derived components if we've computed them
-    if compute_ww_uv:
-        for var in ['VHM0_WW', 'VMDR_WW']:
-            sampled_vars.pop(var, None)
-    if compute_sw_uv:
-        for var in ['VHM0_SW1', 'VMDR_SW1']:
-            sampled_vars.pop(var, None)
+    # if compute_ww_uv:
+    #     for var in ['VHM0_WW', 'VMDR_WW']:
+    #         sampled_vars.pop(var, None)
+    # if compute_sw_uv:
+    #     for var in ['VHM0_SW1', 'VMDR_SW1']:
+    #         sampled_vars.pop(var, None)
 
     final_vars = {}
     for var, batches in sampled_vars.items():

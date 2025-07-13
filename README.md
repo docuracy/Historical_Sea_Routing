@@ -160,11 +160,12 @@ data sampled from 1,000 randomly selected sea hexes.
 
   The resulting correlation matrix revealed several high-correlation pairs:
 
-  | Variable Pair                          | r           | Decision                      |
-  | -------------------------------------- | ----------- | ----------------------------- |
-  | Stokes Drift (`VSDX`, `VSDY`) vs. Wind | \~0.89–0.90 | Dropped                       |
-  | Wind wave height vs. period            | \~0.90      | Period dropped                |
-  | Wind vectors vs. Wave-derived vectors  | \~0.80–0.84 | Wind data dropped (see below) |
+  | Variable Pair               | r           | Decision                                              |
+  |-----------------------------|-------------|-------------------------------------------------------|
+  | Wind Wave Height vs. Period | \~0.90      | Period dropped, height used for component computation |
+  | Wind vs. Wind Wave          | \~0.80-0.84 | Wind dropped                                          |
+  | Stokes Drift vs. Wind Wave  | \~0.92-0.94 | Stokes Drift dropped                                  |
+
 
 ![variable_correlation_clustermap.png](screenshots/variable_correlation_clustermap.png)
 
