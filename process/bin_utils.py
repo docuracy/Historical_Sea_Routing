@@ -91,71 +91,80 @@ def get_binned_data_for_nodes(ds, indexer, centroid_df, var_names, bins_dict, ba
     return binned_vars, times
 
 
-def freedman_diaconis_bins(data, max_bins=15):
-    data = data[np.isfinite(data)]
-    if data.size == 0:
-        return np.array([0.0, 1.0])
-
-    q75, q25 = np.percentile(data, [75, 25])
-    iqr = q75 - q25
-    if iqr == 0:
-        return np.linspace(np.min(data), np.max(data), num=3)
-
-    bin_width = 2 * iqr * data.size ** (-1 / 3)
-    if bin_width == 0:
-        return np.linspace(np.min(data), np.max(data), num=3)
-
-    bins = np.arange(np.min(data), np.max(data) + bin_width, bin_width)
-    if len(bins) > max_bins:
-        bins = np.linspace(np.min(data), np.max(data), max_bins + 1)
-    return bins
-
-
 def compute_variable_bins_sampled(
-        ds_path: Path,
-        wave_types: list[str] = ["WW", "SW1"],
-        max_bins: int = 7,
-        samples_per_variable: int = 10_000,
-        random_seed: int = 42,
+    ds_path: Path,
+    max_magnitude_bins: int = 8,
+    samples: int = 10_000,
+    random_seed: int = 42,
 ):
+    import xarray as xr
+    import numpy as np
+
     rng = np.random.default_rng(random_seed)
     ds = xr.open_zarr(ds_path, consolidated=True)
-    results = {}
 
-    dims = ds[f"VHM0_{wave_types[0]}"].dims
-    dim_sizes = {dim: ds[f"VHM0_{wave_types[0]}"].sizes[dim] for dim in dims}
-    idx_choices = {
-        dim: rng.integers(0, dim_sizes[dim], size=samples_per_variable)
+    # Identify variable names
+    if "uo" in ds and "vo" in ds:
+        u_var, v_var = "uo", "vo"
+    elif "eastward_wind" in ds and "northward_wind" in ds:
+        u_var, v_var = "eastward_wind", "northward_wind"
+    else:
+        raise ValueError("No recognised u/v vector variables found.")
+
+    dims = ds[u_var].dims
+    sizes = ds[u_var].sizes
+
+    # Sample random indices
+    indices = {
+        dim: xr.DataArray(rng.integers(0, sizes[dim], size=samples), dims="sample")
         for dim in dims
     }
 
-    for wt in wave_types:
-        mag = ds[f"VHM0_{wt}"].isel({dim: xr.DataArray(idx_choices[dim], dims="sample") for dim in dims}).values
-        dir_deg = ds[f"VMDR_{wt}"].isel({dim: xr.DataArray(idx_choices[dim], dims="sample") for dim in dims}).values
-        dir_rad = np.deg2rad(dir_deg)
+    print(f"🔍 Sampling {samples} vector pairs for {ds_path}...")
 
-        u_comp = -mag * np.sin(dir_rad)
-        v_comp = -mag * np.cos(dir_rad)
+    u = ds[u_var].isel(indices).values
+    v = ds[v_var].isel(indices).values
 
-        for comp_name, comp_data in [(f"{wt.lower()}_u", u_comp), (f"{wt.lower()}_v", v_comp)]:
-            comp_clean = comp_data[np.isfinite(comp_data)]
-            if comp_clean.size < 10:
-                print(f"⚠️ Too few valid values for {comp_name}, skipping.")
-                continue
+    # Compute magnitude
+    magnitude = np.sqrt(u**2 + v**2)
 
-            bins = freedman_diaconis_bins(comp_clean, max_bins=max_bins)
-            if bins.size < 2:
-                print(f"⚠️ Failed to compute bins for {comp_name}, skipping.")
-                continue
+    # Fixed directional bins (8 sectors)
+    direction_bin_edges = np.linspace(0, 360, 9)  # 8 bins
+    direction_bin_centres = (direction_bin_edges[:-1] + direction_bin_edges[1:]) / 2
 
-            midpoints = 0.5 * (bins[:-1] + bins[1:])
-            results[comp_name] = {
-                "bin_count": bins.size,
-                "bins": bins.tolist(),
-                "midpoints": midpoints.tolist(),
-            }
+    # Compute adaptive magnitude bins
+    def freedman_diaconis_bins(data, max_bins=7):
+        data = data[np.isfinite(data)]
+        if len(data) < 10:
+            return None
+        q75, q25 = np.percentile(data, [75, 25])
+        iqr = q75 - q25
+        bin_width = 2 * iqr / (len(data) ** (1 / 3))
+        if bin_width == 0:
+            return None
+        bins = int(np.ceil((data.max() - data.min()) / bin_width))
+        bins = min(bins, max_bins)
+        return np.histogram_bin_edges(data, bins=bins)
 
-    return results
+    magnitude_bins = freedman_diaconis_bins(magnitude, max_bins=max_magnitude_bins)
+    if magnitude_bins is None or len(magnitude_bins) < 2:
+        print("⚠️ Failed to compute valid magnitude bins.")
+        return None
+
+    magnitude_bin_centres = 0.5 * (magnitude_bins[:-1] + magnitude_bins[1:])
+
+    return {
+        "angle_deg": {
+            "bin_edges": direction_bin_edges.tolist(),
+            "midpoints": direction_bin_centres.tolist(),
+            "bin_count": 8
+        },
+        "magnitude": {
+            "bin_edges": magnitude_bins.tolist(),
+            "midpoints": magnitude_bin_centres.tolist(),
+            "bin_count": len(magnitude_bins) - 1
+        }
+    }
 
 
 def compute_all_bins_to_json(output_filename="copernicus_variable_bins.json"):
@@ -168,15 +177,17 @@ def compute_all_bins_to_json(output_filename="copernicus_variable_bins.json"):
 
     all_results = {}
 
-    ds_name = "waves_hourly"
-    dataset_info = datasets.get(ds_name)
-    if dataset_info is None:
-        raise ValueError(f"Dataset '{ds_name}' is not defined in the datasets configuration.")
+    ds_names = ["current_hourly", "wind_hourly"]
 
-    ds_file = copernicus_data_directory / f"{ds_name}_subset.zarr"
+    for ds_name in ds_names:
+        dataset_info = datasets.get(ds_name)
+        if dataset_info is None:
+            raise ValueError(f"Dataset '{ds_name}' is not defined in the datasets configuration.")
 
-    result = compute_variable_bins_sampled(ds_file)
-    all_results[ds_name] = result
+        ds_file = copernicus_data_directory / f"{ds_name}_subset.zarr"
+
+        result = compute_variable_bins_sampled(ds_file)
+        all_results[ds_name] = result
 
     with open(output_path, "w") as f:
         json.dump(all_results, f, indent=2)
@@ -188,13 +199,16 @@ def compute_all_bins_to_json(output_filename="copernicus_variable_bins.json"):
 
 def assign_bin_index(values, bin_edges, nan_sentinel=-1):
     values = np.asarray(values)
-    # Create an output array initialized to nan_sentinel
     bin_indices = np.full(values.shape, nan_sentinel, dtype=int)
 
-    # Mask for valid (non-NaN) values
     valid_mask = ~np.isnan(values)
+    valid_values = values[valid_mask]
 
-    # Only digitize valid values
-    bin_indices[valid_mask] = np.digitize(values[valid_mask], bin_edges) - 1  # zero-based
+    # Compute bin indices
+    indices = np.digitize(valid_values, bin_edges) - 1  # zero-based
 
+    # Clamp values outside the bin range (values might exceed those in the sampled subset used to create the bins)
+    indices = np.clip(indices, 0, len(bin_edges) - 2)
+
+    bin_indices[valid_mask] = indices
     return bin_indices

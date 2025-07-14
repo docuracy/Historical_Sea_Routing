@@ -111,109 +111,58 @@ This proxy-based strategy supports practical, historically grounded simulation o
 
 #### _Environmental Data Processing Overview_
 
-This project uses two datasets from the Copernicus Marine Service, accessible via DOI:
+This project uses variables from two Copernicus Marine Service datasets:
 
-* Wind and wave reanalysis: [WIND_GLO_PHY_L4_MY_012_006](https://doi.org/10.48670/moi-00185)
-* Wave model: [GLOBAL_ANALYSISFORECAST_WAV_001_027](https://doi.org/10.48670/moi-00017)
+* [Global Ocean Hourly Reprocessed Sea Surface Wind and Stress from Scatterometer and Model](https://doi.org/10.48670/moi-00185) (
+  0.125° resolution)
+    * `eastward_wind`: Eastward component of wind vector
+    * `northward_wind`: Northward component of wind vector
+* [Global Ocean Physics Analysis and Forecast](https://doi.org/10.48670/moi-00016) (0.083° resolution)Global Ocean
+  Physics Analysis and Forecast (0.083° resolution)
+    * `uo`: Eastward component of ocean current vector
+    * `vo`: Northward component of ocean current vector
+    * `zos`: Sea surface height above geoid
 
-The environmental processing pipeline reduces these high-resolution datasets into compact monthly modal composites,
-ensuring efficient lookup of dominant conditions at each graph node while preserving meteorologically meaningful
-information.
+These datasets provide hourly wind and current measurements. Since current data is unavailable before June 2022, the
+pipeline operates on a consistent two-year window (2023–2024).
 
-Key steps include:
+The processing pipeline transforms these high-volume time series into compact, monthly modal composites. These preserve
+dominant environmental conditions while enabling fast lookup and scalable use in simulation and routing tasks.
 
-* **Spatial Indexing:** Each H3 node is mapped to the nearest environmental data grid cell.
+* **Spatial Indexing:** Each H3 hexagonal graph node is mapped to the nearest environmental grid cell to ensure
+  consistent spatial alignment.
 
-* **Discretisation:** Continuous variables (e.g., wind speed, wave height) are binned into categorical intervals.
+* **Discretisation:** Wind and current vectors are converted from Cartesian components to polar form (magnitude and
+  direction), then discretised into categorical bins for modal aggregation.
+  Current vectors are also classified into **ebb** and **flood** phases based on the preceding hour's sea level change.
 
-* **Aggregation by Mode:** For each H3 cell and calendar month, the most frequently observed combination of binned
-  environmental conditions is computed across two years of hourly data (~1,460–1,500 samples/month/location).
+* **Monthly and Phase-Based Aggregation:**
+  For each node and calendar month, the most frequently occurring combination of binned conditions is computed from all
+  hourly observations. Current data are aggregated separately for ebb and flood phases.
 
-* **Optimised Storage:** The modal dataset is saved in compressed Zarr format for rapid access and scalability.
+* **Optimised Storage:** The resulting modal dataset is stored in compressed Zarr format, supporting high-performance
+  access across large spatial graphs.
 
-This transformation replaces terabytes of raw hourly data with a streamlined and simulation-ready climatological model.
+#### _Modal Confidence Assessment_
 
-#### _Correlation-Based Variable Reduction_
+Each modal value is derived from approximately 1,460–1,500 hourly observations per node per month. Confidence in the
+modal condition is quantified as the fraction of samples matching the most frequent bin combination.
 
-To reduce dataset complexity without compromising environmental fidelity, correlation analysis was conducted on hourly
-data sampled from 1,000 randomly selected sea hexes.
+- A confidence of 1.0 means all observations shared the same binned condition.
 
-* **Vector Decomposition**
+- Lower confidence indicates greater variability in that month's conditions.
 
-  To enable meaningful comparisons and operations, wave magnitude and direction were converted into Cartesian vector
-  components:
+Separate confidence scores are generated for:
 
-    ```math
-    u = -H × sin(θ)
-    v = -H × cos(θ)
-    ```
+- Wind
+- Ebb Current
+- Flood Current
 
-  where _H_ is wave height and _θ_ is mean wave direction in radians. Components were derived for:
+These scores help assess the stability of modal assumptions across space and time.
 
-    - Wind waves: ww_u, ww_v
-    - Swell waves: sw_u, sw_v
+![wind_modal_confidence_histogram.png](screenshots/wind_modal_confidence_histogram.png)
 
-  This representation enables correlation analysis and vector-based reasoning.
-
-
-* **Variable Elimination**
-
-  The resulting correlation matrix revealed several high-correlation pairs:
-
-  | Variable Pair               | r           | Decision                                              |
-  |-----------------------------|-------------|-------------------------------------------------------|
-  | Wind Wave Height vs. Period | \~0.90      | Period dropped, height used for component computation |
-  | Wind vs. Wind Wave          | \~0.80-0.84 | Wind dropped                                          |
-  | Stokes Drift vs. Wind Wave  | \~0.92-0.94 | Stokes Drift dropped                                  |
-
-
-![variable_correlation_clustermap.png](screenshots/variable_correlation_clustermap.png)
-
-#### _Wind Proxy via Regression_
-
-Given the strong linear relationship between wave-based and wind vector components, a regression model was used to
-derive wind vectors from wave data:
-
-* _eastward_wind ≈ β₀ + β₁ × ww_u_
-* _northward_wind ≈ β₀ + β₁ × ww_v_
-
-| Component | β₀       | β₁      |
-|-----------|----------|---------|
-| u         | -0.04379 | 0.96965 |
-| v         | -0.00858 | 0.95177 |
-
-These models provide highly accurate wind estimates from the higher-resolution wave fields, making them suitable
-substitutes.
-
-#### _Simplification Decision_
-
-Because:
-
-* The wind dataset is coarser in space and time, and
-* Wave-based proxies offer comparable explanatory power at higher fidelity,
-
-the wind dataset was removed from the pipeline entirely. This step improves performance and simplifies storage, while
-retaining key directional forcing information.
-
-#### _Modal Confidence and Validation_
-
-Each modal value is computed from a sample of ~1,460–1,500 hourly data points per month and location, representing two
-full years of observations.
-
-**Confidence Score:** Modal confidence is defined as the frequency ratio of the most common bin combination (i.e., the
-proportion of samples
-in a month that match the modal condition). A higher score indicates stronger recurrence of that condition.
-
-* High confidence in summer months suggests strong seasonality and environmental predictability.
-* Lower confidence in other months reflects greater variability, consistent with real-world
-  transitional weather.
-
-This validation confirms that modal routing inputs are most stable, and thus most reliable, during peak seasonal
-conditions.
-
-![modal_confidence_histogram.png](screenshots/modal_confidence_histogram.png)
-
-![modal_confidence_monthly_summary.png](screenshots/modal_confidence_monthly_summary.png)
+![wind_modal_confidence_monthly_summary.png](screenshots/wind_modal_confidence_monthly_summary.png)
 
 #### _Visibility Reduction_
 
@@ -224,21 +173,22 @@ estimate historical attenuation of visibility due to fog and rain.
 
 The core routing logic is based on the Dijkstra bidirectional shortest path algorithm
 from [graphology](https://graphology.github.io/),
-with weights calculated dynamically via `sailing.js`.
+with weights calculated dynamically via the `premodern-sailing.js` module.
 
-The `sailing.js` module is a prototype implementation that estimates traversal cost (time) over each edge by factoring
+This module is a prototype implementation that estimates traversal cost (time) over each edge by factoring
 in:
 
 - **Distance**: Great-circle distance between source and target hex centroids.
-- **Wind direction and speed**: Monthly averages, influencing effective sailing angle and speed.
-- **Sea surface conditions**: Wave height and surface currents, where applicable.
-- **Vessel parameters**: Sourced from `sailing_vessels.js`, including draught, beam, and ideal points of sail.
+- **Wind direction and speed**: Modal characteristics per month.
+- **Current direction and speed**: Current data, classified into ebb and flood phases (the phase closest to the edge
+  direction is used).
+- **Vessel parameters**: Sourced from `premodern-sailing.js`, including draught, beam, and sail characteristics, and
+  dynamically adjusted depending on the loaded weight.
 - **Bathymetry constraints**: Nodes or edges in shallow waters incur heavy penalties if the depth falls below vessel
   draught tolerance.
 
 A custom weight function uses these inputs to simulate the effective time taken by a given sailing vessel across an edge
-for a
-specific month. The route finder adapts to seasonal conditions, allowing month-specific simulations of outward and
+for a given month. The route finder adapts to seasonal conditions, allowing month-specific simulations of outward and
 return legs.
 
 ### Longevity

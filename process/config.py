@@ -50,8 +50,8 @@ datasets = {
         "max_full_year_date_range": ("1995-01-01", "2025-01-01"),
         "date_range": ("2023-01-01T00:00:00", "2025-01-01T00:00:00"),
         "variables": {
-            "eastward wind": "eastward_wind",  # Dropped following correlation analysis
-            "northward wind": "northward_wind"  # Dropped following correlation analysis
+            "eastward wind": "eastward_wind",
+            "northward wind": "northward_wind"
         }
     },
     "waves_hourly": {
@@ -61,14 +61,26 @@ datasets = {
         "max_full_year_date_range": ("2023-01-01", "2025-01-01"),  # Only two complete years currently available (June 2025)
         "date_range": ("2023-01-01T00:00:00", "2025-01-01T00:00:00"),
         "variables": {
-            "stokes drift x velocity": "VSDX",  # Dropped following correlation analysis
-            "stokes drift y velocity": "VSDY",  # Dropped following correlation analysis
-            "wind wave from direction": "VMDR_WW",  # Used in computation of component vectors
-            "wind wave mean period": "VTM01_WW",  # Dropped following correlation analysis
-            "wind wave significant height": "VHM0_WW",  # Used in computation of component vectors
-            "primary swell wave from direction": "VMDR_SW1",  # Used in computation of component vectors
-            "primary swell wave mean period": "VTM01_SW1",  # Dropped following correlation analysis
-            "primary swell wave significant height": "VHM0_SW1",  # Used in computation of component vectors
+            "stokes drift x velocity": "VSDX",
+            "stokes drift y velocity": "VSDY",
+            "wind wave from direction": "VMDR_WW",
+            "wind wave mean period": "VTM01_WW",
+            "wind wave significant height": "VHM0_WW",
+            "primary swell wave from direction": "VMDR_SW1",
+            "primary swell wave mean period": "VTM01_SW1",
+            "primary swell wave significant height": "VHM0_SW1",
+        }
+    },
+    "current_hourly": {
+        "doi": "https://doi.org/10.48670/moi-00016",
+        "resolution_degrees": 0.083,  # This is significantly higher resolution than the ERA5 dataset (0.5 degrees)
+        "dataset_id": "cmems_mod_glo_phy_anfc_0.083deg_PT1H-m",
+        "max_full_year_date_range": ("2022-06-01", "2025-07-23"),
+        "date_range": ("2023-01-01T00:00:00", "2025-01-01T00:00:00"),
+        "variables": {
+            "eastward sea water velocity": "uo",
+            "northward sea water velocity": "vo",
+            "sea surface height above geoid": "zos",
         }
     },
     "Weather": {
