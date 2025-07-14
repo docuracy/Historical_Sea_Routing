@@ -70,7 +70,7 @@ def analyse_confidence(ds_name: str, phases: list[str] = None):
 
     if phases:
         for i, phase in enumerate(phases):
-            conf = ds["confidence"].isel(mode=i).values
+            conf = ds["confidence"].isel(phase=i).values
             summary = compute_confidence_summary(conf)
             print(f"Phase: {phase}")
             for k, v in summary.items():
@@ -79,7 +79,7 @@ def analyse_confidence(ds_name: str, phases: list[str] = None):
             plot_histogram(summary["values"], ds_name, phase)
 
             # Monthly summary
-            df_conf = ds["confidence"].isel(mode=i).to_dataframe().reset_index()
+            df_conf = ds["confidence"].isel(phase=i).to_dataframe().reset_index()
             monthly = df_conf.groupby("month")["confidence"].agg(
                 count='count',
                 min='min',
@@ -122,7 +122,7 @@ def analyse_confidence(ds_name: str, phases: list[str] = None):
 def main():
     datasets = {
         "wind": None,
-        # "current": ["ebb", "flood"],
+        "current": ["ebb", "flood"],
     }
 
     for ds_name, phases in datasets.items():

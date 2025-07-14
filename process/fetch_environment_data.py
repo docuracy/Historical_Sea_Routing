@@ -10,10 +10,11 @@ import copernicusmarine
 import numpy as np
 import xarray as xr
 import zarr
+from dask import delayed, compute
 from scipy.spatial import cKDTree
 from tqdm import tqdm
 
-from process.bin_utils import compute_all_bins_to_json, get_binned_data_for_components_dask
+from process.bin_utils import compute_all_bins_to_json, get_binned_data_for_components_dask, assign_bin_index
 from process.config import datasets, AOIS, copernicus_data_directory
 from process.sea_graph import get_all_unique_h3_centroids_df
 
@@ -135,6 +136,68 @@ class LatLonIndexer:
         return cls(lats=npz["lats"], lons=npz["lons"])
 
 
+def compute_angular_components_DEPRECATED(ds, input_vars, output_vars, phases=None):
+    def components(u, v):
+        mag = np.sqrt(u ** 2 + v ** 2)
+        dir_rad = np.arctan2(-u, -v)
+        dir_deg = np.rad2deg(dir_rad) % 360
+        return mag, dir_deg
+
+    # --- Start of Proposed Modification ---
+
+    # Identify if 'depth' dimension exists and is present in input variables
+    # Assuming 'depth' is always the second dimension if present.
+    # We'll apply .isel(depth=0) to the input DataArrays before calculation.
+    # This ensures that 'mag' and 'deg' will also be 3D (time, lat, lon).
+
+    ds_processed = ds # Start with the original dataset
+
+    # Check for 'depth' dimension in the first input variable (assuming consistent dimensions)
+    # Check if 'depth' exists and its position (expected to be the second dim)
+    if 'depth' in ds[input_vars[0]].dims and ds[input_vars[0]].dims.index('depth') == 1:
+        # If 'depth' is present as the second dimension, select the first level (index 0)
+        # for all relevant variables.
+        # This will return a new Dataset or DataArray view with 'depth' squeezed out
+        # or reduced to a single point.
+        ds_processed = ds.isel(depth=0)
+        # print(f"DEBUG: Squeezed depth dimension. New ds_processed dims: {ds_processed.dims}")
+        # For verification, check a variable's shape after squeezing:
+        # print(f"DEBUG: ds_processed['{input_vars[0]}'].shape after squeezing: {ds_processed[input_vars[0]].shape}")
+
+    # --- End of Proposed Modification ---
+
+
+    # Now, use ds_processed for calculations
+    # If depth was squeezed, these will be 3D DataArrays (time, lat, lon)
+    mag, deg = components(ds_processed[input_vars[0]], ds_processed[input_vars[1]])
+
+    result = {
+        output_vars[0]: mag,
+        output_vars[1]: deg,
+    }
+
+    if phases and "zos" in ds_processed: # Use ds_processed here too!
+        zos = ds_processed["zos"]
+
+        if zos.sizes["time"] < 2:
+            raise ValueError("At least two time points are required for phase detection.")
+
+        delta_zos = zos.diff(dim="time")
+
+        # Pad with NaNs to align with original time
+        pad = xr.full_like(zos.isel(time=0), np.nan)
+        pad = pad.expand_dims(time=[zos.time.values[0]])
+        delta_zos_full = xr.concat([pad, delta_zos], dim="time")
+
+        # Ensure time coordinate matches original
+        delta_zos_full["time"] = zos.time
+
+        phase_arr = (delta_zos_full > 0).astype(np.int8)  # 1=flood, 0=ebb
+        result["phase"] = phase_arr
+
+    return result
+
+
 def compute_angular_components(ds, input_vars, output_vars, phases=None):
     def components(u, v):
         mag = np.sqrt(u ** 2 + v ** 2)
@@ -151,12 +214,19 @@ def compute_angular_components(ds, input_vars, output_vars, phases=None):
 
     if phases and "zos" in ds:
         zos = ds["zos"]
-        # Determine ebb (0) vs flood (1)
-        # zos.shape == (time, lat, lon)
-        delta_zos = zos.diff(dim="time", label="upper")  # shape: (time-1, lat, lon)
 
-        # Shift result back to align with original time index
-        delta_zos_full = xr.concat([delta_zos.isel(time=0)*np.nan, delta_zos], dim="time")
+        if zos.sizes["time"] < 2:
+            raise ValueError("At least two time points are required for phase detection.")
+
+        delta_zos = zos.diff(dim="time")  # shape: (T-1, lat, lon)
+
+        # Pad with NaNs to align with original time
+        pad = xr.full_like(zos.isel(time=0), np.nan)
+        pad = pad.expand_dims(time=[zos.time.values[0]])
+        delta_zos_full = xr.concat([pad, delta_zos], dim="time")
+
+        # Ensure time coordinate matches original
+        delta_zos_full["time"] = zos.time
 
         phase_arr = (delta_zos_full > 0).astype(np.int8)  # 1=flood, 0=ebb
         result["phase"] = phase_arr
@@ -277,29 +347,113 @@ def create_wind_modal_zarr(
 
     print(f"✅ Modal Zarr dataset written to {output_path}")
 
-
+_cached_ds = None
 def process_batch_current(start, end, latlon_batch, derived_vars_path, times_np, bin_edges, input_vars, output_vars,
                        n_months, phases):
     import numpy as np
     import pandas as pd
     import xarray as xr
     from collections import Counter
+    import os # Import os for pid
 
-    ds = xr.open_zarr(derived_vars_path)
+    global _cached_ds
+
+    # Check if the dataset is already loaded in this worker process
+    if _cached_ds is None:
+        print(f"Worker PID {os.getpid()}: Opening Zarr store {derived_vars_path} for the first time...")
+        _cached_ds = xr.open_zarr(derived_vars_path)
+        print(f"Worker PID {os.getpid()}: Zarr store opened. Dims: {_cached_ds.dims}")
+    else:
+        # print(f"Worker PID {os.getpid()}: Using cached Zarr store.")
+        pass # Using cached ds
+
+    ds = _cached_ds # Use the cached dataset
+
+    # # Debugging output
+    # print(f"Inside process_batch_current. ds dims: {ds.dims}")
+    # print(f"Inside process_batch_current. ds coordinates: {ds.coords}")
+    # print(f"Inside process_batch_current. derived_vars_path: {derived_vars_path}")
+    # # Add checks for specific variables' dimensions
+    # for var in input_vars + output_vars:
+    #     if var in ds:
+    #         print(f"  ds['{var}'] dims: {ds[var].dims}, shape: {ds[var].shape}")
+
     derived_vars = compute_angular_components(ds, input_vars, output_vars, phases)
+
+    # # Debugging output
+    # print(f"Inside process_batch_current. derived_vars after compute_angular_components:")
+    # for var, da in derived_vars.items():
+    #     print(f"  derived_vars['{var}'] dims: {da.dims}, shape: {da.shape}")
+    #
+    # # Sanity check
+    # ny, nx = ds.dims["latitude"], ds.dims["longitude"]
+    # print(f"ds dimensions: ny={ny}, nx={nx}")
+    # for i, (lat_idx, lon_idx) in enumerate(latlon_batch):
+    #     if lat_idx >= ny or lon_idx >= nx:
+    #         raise IndexError(f"Index out of bounds at {i}: lat_idx={lat_idx}, lon_idx={lon_idx} for shape=({ny}, {nx})")
 
     batch_size_actual = end - start
 
-    # Bin angle and magnitude
-    binned_vars = get_binned_data_for_components_dask(derived_vars, latlon_batch, bin_edges)
+    # --- OPTIMIZED DATA EXTRACTION ---
 
-    # Fetch phase values (0=ebb, 1=flood) from derived_vars["phase"]
-    # shape: (time, batch_size_actual)
-    phase_array = np.stack([
-        derived_vars["phase"][:, lat, lon].values
-        for lat, lon in latlon_batch
-    ], axis=1)  # shape: (time, batch_size_actual)
-    phase_array = phase_array.T.flatten()  # shape: time * batch_size_actual
+    # 1. Prepare indices for Xarray's .isel
+    lats_to_select = [idx[0] for idx in latlon_batch]
+    lons_to_select = [idx[1] for idx in latlon_batch]
+
+    # Create xr.DataArray for advanced indexing (this is key for efficiency)
+    lat_indexer = xr.DataArray(lats_to_select, dims='batch_points')
+    lon_indexer = xr.DataArray(lons_to_select, dims='batch_points')
+
+    # Now, extract ALL relevant time series for the batch in one go for all variables
+    # This creates a Dask graph for the batch extraction.
+    # The .data will trigger the computation of these batch-wise slices.
+    # The result will be (time, batch_points) numpy array.
+
+    # Extract all required raw data for output_vars and phase
+    # This operation will trigger Dask computation to load the data for the entire batch
+    # across all relevant variables (magnitude, angle, phase)
+    # The .compute() is explicitly added to force the Dask graph to run here
+    # and load the data as numpy arrays. This can be memory intensive if batch_size_actual * times_np is huge.
+    # If memory becomes an issue, you might need to leave it as a dask array and pass that to delayed,
+    # but for most typical scenarios, loading it here is more efficient for the downstream pandas/numpy.
+
+    extracted_data = {}
+    for var in output_vars + ['phase']:
+        # derived_vars[var] is now 3D (time, lat, lon) after depth removal
+        da = derived_vars[var]
+        extracted_data[var] = da.isel(
+            latitude=lat_indexer,
+            longitude=lon_indexer
+        ).data.compute() # .data gets the underlying Dask array, .compute() materializes it to NumPy
+
+    # Bin angle and magnitude using the extracted numpy arrays
+    binned_vars = {}
+    for var in output_vars:
+        # extracted_data[var] is now (time, batch_points) NumPy array
+        # Assign bin index to each time series within the batch
+        binned = [
+            delayed(assign_bin_index)(extracted_data[var][:, i], bin_edges[var])
+            for i in range(batch_size_actual)
+        ]
+        binned_compute = compute(*binned) # Execute the delayed binning tasks
+        binned_vars[var] = np.stack(binned_compute, axis=0).T.astype(np.int16) # (time, batch_points)
+
+    # Now, the phase array is also readily available from extracted_data
+    # extracted_data['phase'] is (time, batch_points) NumPy array
+    phase_array = extracted_data['phase'].T.flatten() # Flattens to (time * batch_points)
+
+    # --- END OPTIMIZED DATA EXTRACTION ---
+
+    # # Bin angle and magnitude
+    # binned_vars = get_binned_data_for_components_dask(derived_vars, latlon_batch, bin_edges)
+    #
+    # # Fetch phase values (0=ebb, 1=flood) from derived_vars["phase"]
+    # # shape: (time, batch_size_actual)
+    # phase_array = np.stack([
+    #     derived_vars["phase"][:, lat, lon].values
+    #     for lat, lon in latlon_batch
+    # ], axis=1)  # shape: (time, batch_size_actual)
+    # phase_array = phase_array.T.flatten()  # shape: time * batch_size_actual
 
     # Build flat DataFrame
     binned_stack = np.stack([binned_vars[var] for var in output_vars], axis=-1).transpose(1, 0, 2)
@@ -336,7 +490,7 @@ def process_batch_current(start, end, latlon_batch, derived_vars_path, times_np,
 
 def create_current_modal_zarr(
         bins,
-        batch_size=200,
+        batch_size=50,
         output_filename="current_modal_monthly.zarr",
 ):
     output_path = copernicus_data_directory / "zarr" / output_filename

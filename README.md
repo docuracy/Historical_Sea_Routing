@@ -164,6 +164,14 @@ These scores help assess the stability of modal assumptions across space and tim
 
 ![wind_modal_confidence_monthly_summary.png](screenshots/wind_modal_confidence_monthly_summary.png)
 
+![current_modal_confidence_histogram_ebb.png](screenshots/current_modal_confidence_histogram_ebb.png)
+
+![current_modal_confidence_monthly_summary_ebb.png](screenshots/current_modal_confidence_monthly_summary_ebb.png)
+
+![current_modal_confidence_histogram_flood.png](screenshots/current_modal_confidence_histogram_flood.png)
+
+![current_modal_confidence_monthly_summary_flood.png](screenshots/current_modal_confidence_monthly_summary_flood.png)
+
 #### _Visibility Reduction_
 
 Modern meteorological data from the [Copernicus Climate Data Store](https://cds.climate.copernicus.eu/) are used to

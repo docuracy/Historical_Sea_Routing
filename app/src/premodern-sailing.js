@@ -149,35 +149,6 @@ const SailingMechanics = {
 };
 
 // --- 3. MAIN ESTIMATE SAILING TIME FUNCTION ---
-
-function deriveProxyVectors(waveX, waveY) {
-    const { wind_beta0, wind_beta1, current_beta0, current_beta1 } = state.envProxyConstants;
-
-    const wind = {
-        x: wind_beta0 + wind_beta1 * waveX,
-        y: wind_beta0 + wind_beta1 * waveY
-    };
-
-    const current = {
-        x: current_beta0 + current_beta1 * waveX,
-        y: current_beta0 + current_beta1 * waveY
-    };
-
-    const currentSpeed = Math.hypot(current.x, current.y);
-    const currentDir = currentSpeed > 0
-        ? { x: current.x / currentSpeed, y: current.y / currentSpeed }
-        : { x: 0, y: 0 };
-
-    return {
-        wind,
-        current: {
-            ...current,
-            speed: currentSpeed,
-            dir: currentDir
-        }
-    };
-}
-
 /**
  * Estimates the sailing time of a medieval vessel between two nodes,
  * incorporating vessel dimensions, cargo, and varying environmental conditions.
