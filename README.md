@@ -121,17 +121,14 @@ This project uses variables from two Copernicus Marine Service datasets:
     * `utotal`: Surface sea water x velocity
     * `vtotal`: Surface sea water y velocity
 
-These datasets provide hourly wind and current measurements. Since current data is unavailable before June 2022, the
+These datasets provide hourly wind and current measurements. Since current data are unavailable before June 2022, the
 pipeline operates on a consistent two-year window (2023–2024).
-
-The processing pipeline transforms these high-volume time series into compact, monthly modal composites. These preserve
-dominant environmental conditions while enabling fast lookup and scalable use in simulation and routing tasks.
 
 * **Spatial Indexing:** Each H3 hexagonal graph node is mapped to the nearest environmental grid cell to ensure
   consistent spatial alignment.
 
 * **Monthly Directional Flow Aggregation:** For each edge and calendar month, wind and current vector components are
-  projected onto the edge’s direction. The flow
+  fetched for the edge midpoint, and projected onto the edge’s direction. The flow
   time series are classified into forward (positive projection) and reverse (negative projection) components. For each
   direction, the algorithm computes the weighted circular mean of angles and the arithmetic mean of magnitudes across
   all hourly observations. This approach captures the dominant directional flows separately for forward and reverse
@@ -156,7 +153,7 @@ in:
 - **Current direction and speed**: Current data (the phase closest to the edge direction is used).
 - **Vessel parameters**: Sourced from `premodern-sailing.js`, including draught, beam, and sail characteristics, and
   dynamically adjusted depending on the loaded weight.
-- **Bathymetry constraints**: Nodes or edges in shallow waters incur heavy penalties if the depth falls below vessel
+- **Bathymetry constraints**: Nodes in shallow waters incur heavy penalties if the depth falls below vessel
   draught tolerance.
 
 A custom weight function uses these inputs to simulate the effective time taken by a given sailing vessel across an edge
