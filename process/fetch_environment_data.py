@@ -85,6 +85,8 @@ def fetch_and_index_marine_dataset(dataset_name, bbox):
                 maximum_latitude=bbox[3],
                 start_datetime=date_range[0] if date_range else None,
                 end_datetime=date_range[1] if date_range else None,
+                minimum_depth=0.49402499198913574,
+                maximum_depth=0.49402499198913574,
                 output_filename=str(output_file),
                 force_download=True,
             )
@@ -248,6 +250,14 @@ def process_batch_wind(start, end, latlon_batch, derived_vars_path, times_np, bi
 
     binned_vars = get_binned_data_for_components_dask(derived_vars, latlon_batch, bin_edges)
 
+    # Print sample of derived_vars
+    print(f"Process batch {start}-{end}: Derived vars samples")
+    for var, da in derived_vars.items():
+        print(f"Variable: {var}")
+        print(f"  shape: {da.shape}")
+        print(f"  min: {da.min().values}, max: {da.max().values}")
+        print(f"  sample (3x2x2):\n{da[:3, 0:2, 0:2].values}")
+
     binned_stack = np.stack([binned_vars[var] for var in output_vars], axis=-1).transpose(1, 0, 2)
     flat = binned_stack.reshape(-1, len(output_vars))
     time_col = np.tile(times_np, batch_size_actual)
@@ -278,7 +288,7 @@ def process_batch_wind(start, end, latlon_batch, derived_vars_path, times_np, bi
 
 def create_wind_modal_zarr(
         bins,
-        batch_size=200,
+        batch_size=3,
         output_filename="wind_modal_monthly.zarr",
 ):
     output_path = copernicus_data_directory / "zarr" / output_filename
@@ -304,6 +314,10 @@ def create_wind_modal_zarr(
 
     times = ds.time.values
     bin_edges = {var: np.array(bins[dataset_name][var]["bin_edges"]) for var in output_vars}
+
+    print("Bin edges:")
+    for var, edges in bin_edges.items():
+        print(f"  {var}: {edges}")
 
     empty = xr.Dataset(
         {
@@ -579,9 +593,9 @@ def main():
     bins = compute_all_bins_to_json()
 
     create_wind_modal_zarr(bins)
-    create_current_modal_zarr(bins)
-
-    analyse_confidence()
+    # create_current_modal_zarr(bins)
+    #
+    # analyse_confidence()
 
 if __name__ == "__main__":
     main()

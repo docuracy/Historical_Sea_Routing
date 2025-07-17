@@ -7,7 +7,7 @@ from pathlib import Path
 
 from process.config import AOIS
 
-AOI = AOIS[1]
+AOI = AOIS[0]
 
 docs_directory = Path(__file__).resolve().parent.parent / "docs"
 geo_output_directory = docs_directory / "data" / AOI["name"]

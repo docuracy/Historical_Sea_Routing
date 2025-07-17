@@ -1,16 +1,16 @@
 import logging
+import warnings
 from pathlib import Path
 
 import fiona
 import geopandas as gpd
 import pandas as pd
+from dask.array.core import xr
 from tqdm import tqdm
 
-from process.config import AOIS
-from process.copernicus_query import query_all_months
-from process.sea_graph_v3 import COASTAL_SEA_RESOLUTION
-
-import warnings
+from process.config import AOIS, copernicus_data_directory
+from process.copernicus_query import query_all_months, daylight_zarr_path, DatasetCache
+from process.sea_graph import COASTAL_SEA_RESOLUTION
 
 warnings.filterwarnings(
     "ignore",
@@ -38,6 +38,17 @@ def main():
         done_df = pd.read_parquet(copernicus_parquet)
         processed_ids = set(done_df["h3_id"])
         print(f"Skipping {len(processed_ids)} already processed cells.")
+
+    dataset_cache = DatasetCache(
+        modal={
+            "wind": xr.open_zarr(copernicus_data_directory / "zarr" / "wind_modal_monthly.zarr", consolidated=True),
+            "current": xr.open_zarr(copernicus_data_directory / "zarr" / "current_modal_monthly.zarr",
+                                    consolidated=True)
+        },
+        weather=xr.open_zarr(copernicus_data_directory / "zarr" / "weather.zarr", consolidated=True),
+        bathymetry=xr.open_zarr(copernicus_data_directory / "zarr" / "bathymetry.zarr", consolidated=True),
+        daylight=xr.open_zarr(daylight_zarr_path, consolidated=True)
+    )
 
     # Get the names of the layers in the geopackage
     layers_in_gpkg = fiona.listlayers(output_gpkg)
@@ -67,13 +78,14 @@ def main():
             engine = "fastparquet"
 
             for row in tqdm(gdf.itertuples(index=False), total=len(gdf), desc=f"Copernicus r{layer}"):
-                monthly_data = query_all_months((row.lat, row.lon))
+                monthly_data = query_all_months((row.lat, row.lon), h3id=row.h3_id, cache=dataset_cache)
                 if monthly_data[0]["deptho"] is None:
                     logger.warning(f"{row.h3_id} at ({row.lat}, {row.lon}) is missing depth data.")
                 for month_idx, stats in enumerate(monthly_data, start=1):
                     record = {
                         "h3_id": row.h3_id,
                         "month": month_idx,
+                        "dist_m": row.dist_m,
                         **stats,
                     }
                     batch.append(record)

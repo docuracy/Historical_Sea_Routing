@@ -1,8 +1,8 @@
 import copernicusmarine
 
 copernicusmarine.subset(
-  dataset_id="cmems_mod_glo_phy_anfc_0.083deg_PT1H-m",
-  variables=["uo", "vo", "zos"],
+  dataset_id="cmems_mod_glo_phy_anfc_merged-uv_PT1H-i",
+  variables=["utide", "utotal", "vtide", "vtotal"],
   minimum_longitude=-45,
   maximum_longitude=37,
   minimum_latitude=25,

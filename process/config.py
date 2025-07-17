@@ -33,16 +33,6 @@ datasets = {
             "sea floor depth": "deptho"
         }
     },
-    "wind_monthly": {
-        "doi": "https://doi.org/10.48670/moi-00181",
-        "resolution_degrees": 0.25,
-        "dataset_id": "cmems_obs-wind_glo_phy_my_l4_P1M",
-        "date_range": ("2023-01-01T00:00:00", "2025-01-01T00:00:00"),
-        "variables": {
-            "eastward wind sdd": "eastward_wind_sdd",
-            "northward wind sdd": "northward_wind_sdd"
-        }
-    },
     "wind_hourly": {
         "doi": "https://doi.org/10.48670/moi-00185",
         "resolution_degrees": 0.125,
@@ -54,33 +44,15 @@ datasets = {
             "northward wind": "northward_wind"
         }
     },
-    "waves_hourly": {
-        "doi": "https://doi.org/10.48670/moi-00017",
-        "resolution_degrees": 0.083,  # This is significantly higher resolution than the ERA5 dataset (0.5 degrees)
-        "dataset_id": "cmems_mod_glo_wav_anfc_0.083deg_PT3H-i",
-        "max_full_year_date_range": ("2023-01-01", "2025-01-01"),  # Only two complete years currently available (June 2025)
-        "date_range": ("2023-01-01T00:00:00", "2025-01-01T00:00:00"),
-        "variables": {
-            "stokes drift x velocity": "VSDX",
-            "stokes drift y velocity": "VSDY",
-            "wind wave from direction": "VMDR_WW",
-            "wind wave mean period": "VTM01_WW",
-            "wind wave significant height": "VHM0_WW",
-            "primary swell wave from direction": "VMDR_SW1",
-            "primary swell wave mean period": "VTM01_SW1",
-            "primary swell wave significant height": "VHM0_SW1",
-        }
-    },
     "current_hourly": {
         "doi": "https://doi.org/10.48670/moi-00016",
         "resolution_degrees": 0.083,  # This is significantly higher resolution than the ERA5 dataset (0.5 degrees)
-        "dataset_id": "cmems_mod_glo_phy_anfc_0.083deg_PT1H-m",
+        "dataset_id": "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i",
         "max_full_year_date_range": ("2022-06-01", "2025-07-23"),
         "date_range": ("2023-01-01T00:00:00", "2025-01-01T00:00:00"),
         "variables": {
-            "eastward sea water velocity": "uo",
-            "northward sea water velocity": "vo",
-            "sea surface height above geoid": "zos",
+            "surface sea water x velocity": "utotal",
+            "surface sea water y velocity": "vtotal",
         }
     },
     "Weather": {

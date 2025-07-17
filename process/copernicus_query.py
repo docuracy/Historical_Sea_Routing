@@ -13,10 +13,20 @@ logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 daylight_zarr_path = copernicus_data_directory / "zarr" / "daylight_ratios.zarr"
 
+from dataclasses import dataclass
 
-def get_daylight_ratio(latlon: tuple, month: int = 0) -> float:
+
+@dataclass
+class DatasetCache:
+    modal: dict[str, xr.Dataset]
+    weather: xr.Dataset
+    bathymetry: xr.Dataset
+    daylight: xr.Dataset
+
+
+def get_daylight_ratio(latlon: tuple, month: int = 0, cache: DatasetCache = None) -> float:
     try:
-        ds = xr.open_zarr(daylight_zarr_path, consolidated=True)
+        ds = cache.daylight
 
         # Ensure input coordinates are within valid range
         lat, lon = latlon
@@ -84,11 +94,9 @@ def estimate_visibility(latlon: tuple,
     return final_visibility.rename("visibility_m")
 
 
-def weather(latlon: tuple, month: int):
+def weather(latlon: tuple, month: int, cache: DatasetCache = None):
     """Return visibility estimates (m) at a point, optionally filtered by month and aggregated."""
-    zarr_file = copernicus_data_directory / "zarr" / "weather.zarr"
-
-    ds = xr.open_zarr(zarr_file, consolidated=True)
+    ds = cache.weather
 
     try:
         # Subset at nearest point
@@ -127,55 +135,70 @@ def weather(latlon: tuple, month: int):
         return None
 
 
-def query_all_datasets(latlon: tuple, month: int = 0) -> dict:
+def query_all_datasets(latlon: tuple, month: int = 0, h3id: str = None, cache: DatasetCache = None) -> dict:
     """
-    Query all datasets at a given lat/lon point.
+    Query all datasets at a given lat/lon point (or h3 ID).
     If month=0, use annual average dataset if available, else time=0 from original.
     If month in 1..12, use monthly average dataset if available, else fallback as above.
     """
     results = {}
 
+    if h3id:
+        for ds_filename in ["wind", "current"]:
+            try:
+                ds = cache.modal[ds_filename]
+
+                if ds_filename == "current":
+                    for phase in ["ebb", "flood"]:
+                        point_data = ds.sel(h3_id=h3id, month=month, phase=phase)
+                        results[f"{ds_filename}_angle_{phase}"] = int(point_data["angle_deg"].values)
+                        results[f"{ds_filename}_magnitude_{phase}"] = int(point_data["magnitude"].values)
+                else:  # wind
+                    point_data = ds.sel(h3_id=h3id, month=month)
+                    results[f"{ds_filename}_angle"] = int(point_data["angle_deg"].values)
+                    results[f"{ds_filename}_magnitude"] = int(point_data["magnitude"].values)
+
+            except Exception as e:
+                logger.error(f"Error querying {ds_filename} dataset: {e}")
+
     for dataset_name, ds_info in datasets.items():
         try:
             if dataset_name == "Weather":
-                results["visibility_m"] = weather(latlon, month)
-            else:
-                base_name = dataset_name.lower().replace(" ", "_")
-
-                zarr_file = copernicus_data_directory / "zarr" / f"{base_name}.zarr"
+                results["visibility_m"] = weather(latlon, month, cache=cache)
+            elif dataset_name == "Bathymetry":  # No longer need any other datasets here
+                ds = cache.bathymetry
 
                 vars_nc = list(ds_info["variables"].values())
 
-                with xr.open_zarr(zarr_file, consolidated=True) as ds:
-                    if "month" in ds.dims and month > 0:
-                        # Monthly averages dataset: select month along with lat/lon
-                        point_data = ds[vars_nc].sel(latitude=latlon[0], longitude=latlon[1], month=month,
-                                                     method="nearest")
-                    elif "time" in ds.dims:
-                        # Annual average or base dataset with time dim: select first time step plus lat/lon
-                        point_data = ds[vars_nc].sel(latitude=latlon[0], longitude=latlon[1], time=ds.time[0],
-                                                     method="nearest")
-                    else:
-                        # Dataset without time dimension: just spatial selection
-                        point_data = ds[vars_nc].sel(latitude=latlon[0], longitude=latlon[1], method="nearest")
+                if "month" in ds.dims and month > 0:
+                    # Monthly averages dataset: select month along with lat/lon
+                    point_data = ds[vars_nc].sel(latitude=latlon[0], longitude=latlon[1], month=month,
+                                                 method="nearest")
+                elif "time" in ds.dims:
+                    # Annual average or base dataset with time dim: select first time step plus lat/lon
+                    point_data = ds[vars_nc].sel(latitude=latlon[0], longitude=latlon[1], time=ds.time[0],
+                                                 method="nearest")
+                else:
+                    # Dataset without time dimension: just spatial selection
+                    point_data = ds[vars_nc].sel(latitude=latlon[0], longitude=latlon[1], method="nearest")
 
-                    # Extract scalar values
-                    for nc_var in vars_nc:
-                        results[nc_var] = float(point_data[nc_var].values)
+                # Extract scalar values
+                for nc_var in vars_nc:
+                    results[nc_var] = float(point_data[nc_var].values)
 
         except Exception as e:
             logger.error(f"Error querying dataset '{dataset_name}': {e}")
 
-    results["daylight_ratio"] = get_daylight_ratio(latlon, month)
+    results["daylight_ratio"] = get_daylight_ratio(latlon, month, cache=cache)
 
     return results
 
 
-def query_all_months(latlon: tuple) -> list[dict]:
+def query_all_months(latlon: tuple, h3id: str = None, cache: DatasetCache = None) -> list[dict]:
     results = []
     for m in range(1, 13):
         try:
-            res = query_all_datasets(latlon, month=m)
+            res = query_all_datasets(latlon, month=m, h3id=h3id, cache=cache)
             results.append(res)
         except Exception as e:
             logger.warning(f"⚠️ Skipping month {m} due to error: {e}")

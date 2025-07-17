@@ -117,11 +117,9 @@ This project uses variables from two Copernicus Marine Service datasets:
   0.125° resolution)
     * `eastward_wind`: Eastward component of wind vector
     * `northward_wind`: Northward component of wind vector
-* [Global Ocean Physics Analysis and Forecast](https://doi.org/10.48670/moi-00016) (0.083° resolution)Global Ocean
-  Physics Analysis and Forecast (0.083° resolution)
-    * `uo`: Eastward component of ocean current vector
-    * `vo`: Northward component of ocean current vector
-    * `zos`: Sea surface height above geoid
+* [Global Ocean Physics Analysis and Forecast](https://doi.org/10.48670/moi-00016) (0.083° resolution, hourly)
+    * `utotal`: Surface sea water x velocity
+    * `vtotal`: Surface sea water y velocity
 
 These datasets provide hourly wind and current measurements. Since current data is unavailable before June 2022, the
 pipeline operates on a consistent two-year window (2023–2024).
@@ -132,45 +130,12 @@ dominant environmental conditions while enabling fast lookup and scalable use in
 * **Spatial Indexing:** Each H3 hexagonal graph node is mapped to the nearest environmental grid cell to ensure
   consistent spatial alignment.
 
-* **Discretisation:** Wind and current vectors are converted from Cartesian components to polar form (magnitude and
-  direction), then discretised into categorical bins for modal aggregation.
-  Current vectors are also classified into **ebb** and **flood** phases based on the preceding hour's sea level change.
-
-* **Monthly and Phase-Based Aggregation:**
-  For each node and calendar month, the most frequently occurring combination of binned conditions is computed from all
-  hourly observations. Current data are aggregated separately for ebb and flood phases.
-
-* **Optimised Storage:** The resulting modal dataset is stored in compressed Zarr format, supporting high-performance
-  access across large spatial graphs.
-
-#### _Modal Confidence Assessment_
-
-Each modal value is derived from approximately 1,460–1,500 hourly observations per node per month. Confidence in the
-modal condition is quantified as the fraction of samples matching the most frequent bin combination.
-
-- A confidence of 1.0 means all observations shared the same binned condition.
-
-- Lower confidence indicates greater variability in that month's conditions.
-
-Separate confidence scores are generated for:
-
-- Wind
-- Ebb Current
-- Flood Current
-
-These scores help assess the stability of modal assumptions across space and time.
-
-![wind_modal_confidence_histogram.png](screenshots/wind_modal_confidence_histogram.png)
-
-![wind_modal_confidence_monthly_summary.png](screenshots/wind_modal_confidence_monthly_summary.png)
-
-![current_modal_confidence_histogram_ebb.png](screenshots/current_modal_confidence_histogram_ebb.png)
-
-![current_modal_confidence_monthly_summary_ebb.png](screenshots/current_modal_confidence_monthly_summary_ebb.png)
-
-![current_modal_confidence_histogram_flood.png](screenshots/current_modal_confidence_histogram_flood.png)
-
-![current_modal_confidence_monthly_summary_flood.png](screenshots/current_modal_confidence_monthly_summary_flood.png)
+* **Monthly Directional Flow Aggregation:** For each edge and calendar month, wind and current vector components are
+  projected onto the edge’s direction. The flow
+  time series are classified into forward (positive projection) and reverse (negative projection) components. For each
+  direction, the algorithm computes the weighted circular mean of angles and the arithmetic mean of magnitudes across
+  all hourly observations. This approach captures the dominant directional flows separately for forward and reverse
+  directions, reflecting realistic environmental conditions for routing.
 
 #### _Visibility Reduction_
 
@@ -188,8 +153,7 @@ in:
 
 - **Distance**: Great-circle distance between source and target hex centroids.
 - **Wind direction and speed**: Modal characteristics per month.
-- **Current direction and speed**: Current data, classified into ebb and flood phases (the phase closest to the edge
-  direction is used).
+- **Current direction and speed**: Current data (the phase closest to the edge direction is used).
 - **Vessel parameters**: Sourced from `premodern-sailing.js`, including draught, beam, and sail characteristics, and
   dynamically adjusted depending on the loaded weight.
 - **Bathymetry constraints**: Nodes or edges in shallow waters incur heavy penalties if the depth falls below vessel
