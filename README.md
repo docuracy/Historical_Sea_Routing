@@ -6,12 +6,6 @@ maritime routes based on seasonal and environmental conditions. The tool may be 
 researchers interested in maritime history, environmental impacts on sailing, and historical route reconstructions.
 
 
-> ⚠️ **Note:** Both the vessel characteristics (`sailing_vessels.js`) and the sailing-time algorithm (`sailing.js`) are
-> proof-of-concept and
-> require refinement. Contributions are welcome, especially from domain experts with knowledge of historical or
-> contemporary
-> sailing vessel performance and environmental interactions.
-
 ![Screenshot 1: Route visualisation on map](/screenshots/routes_and_parameters.png)
 
 - Vessel parameters can be loaded from
