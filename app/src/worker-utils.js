@@ -200,8 +200,8 @@ function oneWayRoute(graph, source, target, vesselParameters, direction, colour)
         const segmentTargetAttrs = graph.getNodeAttributes(targetId);
         const edgeAttrs = graph.getEdgeAttributes(sourceId, targetId);
 
-        if (edgeAttrs && typeof edgeAttrs.length_m === "number") {
-            totalLength += edgeAttrs.length_m;
+        if (edgeAttrs && typeof edgeAttrs.L === "number") {
+            totalLength += edgeAttrs.L;
 
             const segmentUnweightedTime = estimateSailingTime({
                 source: segmentSourceAttrs,

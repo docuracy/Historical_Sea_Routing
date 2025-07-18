@@ -95,31 +95,26 @@ const SailingMechanics = {
      * @returns {number} Efficiency factor (0 to 1).
      */
     calculateSquareSailEfficiency: function (apparentWindAngleRad, apparentWindSpeed, vesselParameters) {
-        const deg = apparentWindAngleRad * 180 / Math.PI;
-
         if (apparentWindSpeed < vesselParameters.minWindSpeedForSailing) {
             return 0; // No effective thrust from sails in calm conditions
         }
 
+        const deg = apparentWindAngleRad * 180 / Math.PI;
         const effectiveNoGoAngleDeg = vesselParameters.noGoAngle * 180 / Math.PI;
         const peakEfficiencyAngleDeg = vesselParameters.maxSailEfficiencyAngle * 180 / Math.PI;
 
-        let angleEfficiency = 0;
-
+        let angleEfficiency;
         if (deg < effectiveNoGoAngleDeg) {
             // Too close to the apparent wind for square sails
-            angleEfficiency = 0;
-        } else if (deg >= effectiveNoGoAngleDeg && deg <= peakEfficiencyAngleDeg) {
+            angleEfficiency = 0.2 * Math.cos(Math.PI * (effectiveNoGoAngleDeg - deg) / effectiveNoGoAngleDeg);
+            angleEfficiency = Math.max(0, angleEfficiency);
+        } else if (deg <= peakEfficiencyAngleDeg) {
             // Linear increase from no-go angle to peak efficiency angle
             angleEfficiency = (deg - effectiveNoGoAngleDeg) / (peakEfficiencyAngleDeg - effectiveNoGoAngleDeg);
-        } else if (deg > peakEfficiencyAngleDeg) {
-            // Maintain high efficiency or slight drop beyond peak towards dead downwind
-            // Assume it plateaus at peak for broad reach / run.
-            angleEfficiency = 1;
-            // Optional: slight reduction for dead downwind due to blanketing
-            // if (peakEfficiencyAngleDeg < 180) { // If peak is not exactly 180 (e.g., 150)
-            //    angleEfficiency = Math.max(0.7, 1 - 0.1 * ((deg - peakEfficiencyAngleDeg) / (180 - peakEfficiencyAngleDeg)));
-            // }
+        } else {
+            // Taper slightly downwind beyond peak
+            const downwindDrop = (180 - deg) / (180 - peakEfficiencyAngleDeg);
+            angleEfficiency = Math.max(0.7, Math.pow(downwindDrop, 0.8)); // Maintain at least 70% efficiency
         }
 
         angleEfficiency = Math.min(1, Math.max(0, angleEfficiency)); // Clamp between 0 and 1
@@ -152,239 +147,182 @@ const SailingMechanics = {
 /**
  * Estimates the sailing time of a medieval vessel between two nodes,
  * incorporating vessel dimensions, cargo, and varying environmental conditions.
- *
- * @param {object} payload - Contains source, target nodes, edge data, month, vesselParameters, cargoWeight.
- * @param {object} payload.source - Source node object.
- * @param {object} payload.target - Target node object.
- * @param {object} payload.edge - Edge data (length_m, dx, dy).
- * @param {number} payload.month - Current month (1-12).
- * @param {object} payload.vesselParameters - Vessel specific parameters (see example structure below).
- * @param {number} [payload.cargoWeight=0] - Current cargo weight in tons.
- * @param {boolean} [payload.timeOnly=false] - If true, returns only travel time, not weighted cost.
- * @returns {number} Estimated sailing time in seconds, or largeValue if impossible.
  */
 export function estimateSailingTime(payload) {
-    // Destructure payload.
     const {source, target, edge, month, vesselParameters, timeOnly = false} = payload;
 
-    // Helper to safely get number values, defaulting if not valid
-    function safeValue(value, defaultValue) {
-        return (typeof value === "number" && !isNaN(value)) ? value : defaultValue;
+    // --- Environmental conditions at the target node ---
+    const {
+        b: bathymetry,  // Depth below sea level (m)
+        c: land_sight,  // Distance to nearest visible land (m)
+        d: land_distance  // Distance to nearest land (m)
+    } = target
+
+    // --- Edge geometry and environment ---
+    const {
+        L: edge_length,
+        a: edge_angle,
+        v, // Meteorological visibility (m) per month
+        D, // Diurnal visibility factor (percentage) per month
+        f // Flow: wind and current conditions per month
+    } = edge;
+
+    if (!f || !f[month-1]) {
+        console.warn(`Missing environmental data for edge ${source.id} → ${target.id} in month ${month}`);
+        console.debug(`Edge data:`, edge);
     }
 
-    // --- Edge Properties ---
-    const length = edge.length_m; // Guaranteed to be a number by previous checks/data structure
-    if (length <= 0) return largeValue; // Handle non-positive length
 
-    const dx = edge.dx; // Guaranteed
-    const dy = edge.dy; // Guaranteed
-    const edgeLengthHypot = Math.hypot(dx, dy);
-    const edgeDir = edgeLengthHypot > 0 ? {x: dx / edgeLengthHypot, y: dy / edgeLengthHypot} : {x: 0, y: 0};
+    const {
+        wA: wind_angle,      // Wind direction (degrees)
+        wM: wind_mag,        // Wind speed (m/s)
+        cA: current_angle,   // Current direction (degrees)
+        cM: current_mag      // Current speed (m/s)
+    } = f[month-1];
 
-    // --- Environmental Data ---
-    const se = source.env?.[month];
-    const te = target.env?.[month];
+    const visibility = v[month-1];  // Meteorological visibility (m)
+    const daylight = D[month-1];  // Diurnal visibility factor (percentage)
 
-    // Helper for averaging environment properties between source and target
-    const avgEnv = (prop) => (safeValue(se?.[prop], 0) + safeValue(te?.[prop], 0)) / 2;
+    // Vessel parameters
+    const {
+        lengthOverall: LoA,
+        beam: Beam,
+        minWindSpeedForSailing: MinWindSpeedForSailing,
+        maxStructuralSpeed: MaxStructuralSpeed,
+        calmWaterMinSpeed: CalmWaterMinSpeed,
+        waveImpactFactor: WaveImpactFactor,
+        currentLateralDragFactor: CurrentLateralDragFactor,
+        actualDraught,
+        lightshipMass,
+        cargoWeight,
+        wettedSurfaceArea,
+        invisibleLandPenalty,
+        darknessPenaltyFactor,
+        bathymetricPenalty
+    } = vesselParameters;
 
-    // --- VESSEL CHARACTERISTICS (Directly from vesselParameters, now pre-populated) ---
-    const LoA = vesselParameters.lengthOverall;
-    const Beam = vesselParameters.beam;
-    // HullCoefficient is part of vesselParameters but not directly used after derived properties
-    const SailArea = vesselParameters.sailArea;
-    const SailEfficiencyFactor = vesselParameters.sailEfficiencyFactor;
-    const MinWindSpeedForSailing = vesselParameters.minWindSpeedForSailing;
-    const MaxSailEfficiencyAngle = vesselParameters.maxSailEfficiencyAngle;
-    const NoGoAngle = vesselParameters.noGoAngle;
-    const MaxStructuralSpeed = vesselParameters.maxStructuralSpeed;
-    const CalmWaterMinSpeed = vesselParameters.calmWaterMinSpeed;
-    const WaveImpactFactor = vesselParameters.waveImpactFactor;
-    // LightshipMass is used in getVesselConfig to compute total mass
-    const CurrentLateralDragFactor = vesselParameters.currentLateralDragFactor;
-    const MaxAddedWaveResistanceCoeff = vesselParameters.maxAddedWaveResistanceCoeff;
+    // --- Calculate vessel displacement volume (m³) from total mass ---
+    const actualDisplacementVolume = (lightshipMass + (cargoWeight || 0)) * 1000 / VesselHydrodynamics.RHO_SEAWATER;
 
-    // Derived vessel properties (already computed and attached by getVesselConfig)
-    const actualDraught = vesselParameters.actualDraught;
-    const actualDisplacementVolume = (vesselParameters.lightshipMass + vesselParameters.cargoWeight) * 1000 / VesselHydrodynamics.RHO_SEAWATER; // Recalc actualDispVol for clarity or pass from getVesselConfig if needed directly
-    const wettedSurfaceArea = vesselParameters.wettedSurfaceArea;
-
-
-    // --- ENVIRONMENTAL FACTORS ---
-
-    // Swell and wave vector components
-    const swellX = avgEnv('sw1_u'); // Replaces swell_x
-    const swellY = avgEnv('sw1_v');
-    const waveX = avgEnv('ww_u');   // Replaces wave_x
-    const waveY = avgEnv('ww_v');
-
-    const { wind, current } = deriveProxyVectors(waveX, waveY);
-
-    const windX = wind.x;
-    const windY = wind.y;
-    const windSpeedTrue = Math.hypot(windX, windY);
-
-    const currentX = current.x;
-    const currentY = current.y;
-    const currentSpeed = current.speed;
-    const currentDir = current.dir;
-
-    // Wave heights
-    const swellHeight = avgEnv('swell_height');
-    const waveHeight = avgEnv('wave_height');
-    const combinedWaveHeight = swellHeight + waveHeight;
-
-    // Compute combined wave components
-    let x = swellX + waveX;
-    let y = swellY + waveY;
-    let mag = Math.hypot(x, y);
-    const waveAvgDir = mag > 0 ? { x: x / mag, y: y / mag } : { x: 0, y: 0 };
-
-    // --- ITERATIVE SOLUTION FOR VESSEL SPEED (Speed Through Water) ---
-    // We iterate to find the vessel's equilibrium speed where thrust balances resistance.
-    // Apparent wind and resistance components depend on currentVesselSpeed.
+    // --- ITERATIVE SOLUTION FOR VESSEL SPEED THROUGH WATER ---
     const MAX_ITERATIONS = 15;
     const TOLERANCE = 0.005;
 
-    let currentVesselSpeed_ThroughWater = Math.max(CalmWaterMinSpeed, windSpeedTrue * 0.1); // Initial guess
+    let currentVesselSpeed = Math.max(CalmWaterMinSpeed, wind_mag * 0.1); // Initial guess
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
-        // 1. Calculate Apparent Wind based on current estimate of Vessel Speed Through Water
-        const vesselVelocityVector_ThroughWater = {
-            x: currentVesselSpeed_ThroughWater * edgeDir.x,
-            y: currentVesselSpeed_ThroughWater * edgeDir.y
+        // Compute vessel velocity vector
+        const vesselVelocity = {
+            x: currentVesselSpeed * Math.cos(edge_angle),
+            y: currentVesselSpeed * Math.sin(edge_angle)
         };
 
-        const apparentWindX = windX - vesselVelocityVector_ThroughWater.x;
-        const apparentWindY = windY - vesselVelocityVector_ThroughWater.y;
+        // Compute apparent wind vector and speed
+        const apparentWindX = wind_mag * Math.cos(wind_angle) - vesselVelocity.x;
+        const apparentWindY = wind_mag * Math.sin(wind_angle) - vesselVelocity.y;
         const apparentWindSpeed = Math.hypot(apparentWindX, apparentWindY);
 
-        // Angle between vessel's intended direction and APPARENT wind direction
-        const cosApparentAngle = apparentWindSpeed > 0 ? (edgeDir.x * (apparentWindX / apparentWindSpeed) + edgeDir.y * (apparentWindY / apparentWindSpeed)) : 1; // Default to 0 angle if no apparent wind
+        // Angle between apparent wind and vessel direction
+        const cosApparentAngle = apparentWindSpeed > 0
+            ? (Math.cos(edge_angle) * (apparentWindX / apparentWindSpeed) + Math.sin(edge_angle) * (apparentWindY / apparentWindSpeed))
+            : 1;
         const apparentWindAngleRad = Math.acos(Math.min(Math.max(cosApparentAngle, -1), 1));
 
-        // 2. Calculate Sail Thrust based on Apparent Wind
+        // Estimate wind thrust from sails
         let windThrust = SailingMechanics.getSailThrust(vesselParameters, apparentWindSpeed, apparentWindAngleRad);
 
-        // Add a base thrust for very calm conditions or if sailing thrust is negligible
+        // Minimum propulsion fallback
         if (windThrust < 1 && apparentWindSpeed < MinWindSpeedForSailing) {
-            windThrust = CalmWaterMinSpeed * VesselHydrodynamics.RHO_SEAWATER * wettedSurfaceArea * 0.05;
+            windThrust += 0.5 * VesselHydrodynamics.RHO_SEAWATER * wettedSurfaceArea * CalmWaterMinSpeed ** 2;
         }
 
-
-        // 3. Calculate Resistance Components at currentVesselSpeed_ThroughWater
-
-        // a. Frictional Resistance
-        const Cf = VesselHydrodynamics.getFrictionalResistanceCoefficient(currentVesselSpeed_ThroughWater, LoA);
+        // --- Resistance components ---
+        const Cf = VesselHydrodynamics.getFrictionalResistanceCoefficient(currentVesselSpeed, LoA);
         const frictionalResistance = 0.5 * VesselHydrodynamics.RHO_SEAWATER * wettedSurfaceArea *
-            Math.pow(currentVesselSpeed_ThroughWater, 2) * Cf;
+            currentVesselSpeed ** 2 * Cf;
 
-        // b. Wave-making Resistance (simplified)
-        const FroudeNumber = VesselHydrodynamics.getFroudeNumber(currentVesselSpeed_ThroughWater, LoA);
+        const FroudeNumber = VesselHydrodynamics.getFroudeNumber(currentVesselSpeed, LoA);
         let waveMakingResistance = 0;
         if (FroudeNumber > 0.1) {
             waveMakingResistance = 0.5 * VesselHydrodynamics.RHO_SEAWATER * actualDisplacementVolume * VesselHydrodynamics.G *
-                Math.pow(FroudeNumber, 3) * WaveImpactFactor;
+                FroudeNumber ** 3 * WaveImpactFactor;
         }
 
-        // c. Air Resistance (above water part)
         const effectiveFrontalArea = Beam * (LoA * 0.1);
-        const airResistance = 0.5 * SailingMechanics.RHO_AIR * effectiveFrontalArea *
-            Math.pow(apparentWindSpeed, 2) * 0.8; // Use apparent wind speed for air resistance
+        const airResistance = 0.5 * SailingMechanics.RHO_AIR * effectiveFrontalArea * apparentWindSpeed ** 2 * 0.8;
 
-
-        // d. Current-Induced Lateral Resistance (Sway Drag)
-        const cosAngleCurrentToVessel = currentSpeed > 0 ? (edgeDir.x * currentDir.x + edgeDir.y * currentDir.y) : 1; // Default to 0 angle if no current
+        // Current-induced lateral drag
+        const currentDir = {x: Math.cos(current_angle), y: Math.sin(current_angle)};
+        const cosAngleCurrentToVessel = current_mag > 0
+            ? Math.cos(edge_angle) * currentDir.x + Math.sin(edge_angle) * currentDir.y
+            : 1;
         const angleCurrentToVesselRad = Math.acos(Math.min(Math.max(cosAngleCurrentToVessel, -1), 1));
-        const currentCrossComponent = currentSpeed * Math.sin(angleCurrentToVesselRad);
-        const currentAddedResistance = CurrentLateralDragFactor * Math.pow(currentCrossComponent, 2) *
-            VesselHydrodynamics.RHO_SEAWATER * LoA * actualDraught;
+        const currentCrossComponent = current_mag * Math.sin(angleCurrentToVesselRad);
+        const maxLateralDrag = 0.5 * VesselHydrodynamics.RHO_SEAWATER * LoA * actualDraught * current_mag ** 2;
+        const currentAddedResistance = Math.min(
+            CurrentLateralDragFactor * currentCrossComponent ** 2 *
+            VesselHydrodynamics.RHO_SEAWATER * LoA * actualDraught,
+            maxLateralDrag * 0.5
+        );
 
-        // e. Added Resistance in Waves (Angle Dependent)
-        const cosAngleWaveToVessel = waveAvgDir.x * edgeDir.x + waveAvgDir.y * edgeDir.y; // Angle between vessel's direction and wave direction
-        const angleWaveToVesselRad = Math.acos(Math.min(Math.max(cosAngleWaveToVessel, -1), 1));
+        const totalResistance = frictionalResistance + waveMakingResistance + airResistance + currentAddedResistance;
 
-        let waveAddedResistance = 0;
-        if (combinedWaveHeight > 0.05) {
-            let waveAngleFactor = 0;
-            if (angleWaveToVesselRad <= Math.PI / 2) {
-                waveAngleFactor = 1 - (angleWaveToVesselRad / (Math.PI / 2));
-            } else {
-                waveAngleFactor = -0.2 * ((angleWaveToVesselRad - (Math.PI / 2)) / (Math.PI / 2));
-                waveAngleFactor = Math.max(-0.2, waveAngleFactor);
-            }
-
-            waveAddedResistance = MaxAddedWaveResistanceCoeff * VesselHydrodynamics.RHO_SEAWATER * LoA * actualDraught *
-                Math.pow(currentVesselSpeed_ThroughWater, 2) * waveAngleFactor * combinedWaveHeight;
-        }
-
-        // Sum all resistance components
-        const totalResistance = frictionalResistance + waveMakingResistance + airResistance + currentAddedResistance + waveAddedResistance;
-
-        // 4. Update currentVesselSpeed_ThroughWater based on Thrust and Resistance
-        let nextVesselSpeed_ThroughWater;
+        // --- Update speed estimate ---
+        let nextVesselSpeed;
         if (totalResistance <= 0) {
-            nextVesselSpeed_ThroughWater = MaxStructuralSpeed;
+            nextVesselSpeed = MaxStructuralSpeed;
         } else {
             const ratio = windThrust / totalResistance;
-            nextVesselSpeed_ThroughWater = currentVesselSpeed_ThroughWater * Math.pow(ratio, 0.2);
+            nextVesselSpeed = currentVesselSpeed * Math.pow(ratio, 0.2);
         }
 
-        // Clamp speed to physical limits
-        nextVesselSpeed_ThroughWater = Math.min(nextVesselSpeed_ThroughWater, MaxStructuralSpeed);
-        nextVesselSpeed_ThroughWater = Math.max(nextVesselSpeed_ThroughWater, CalmWaterMinSpeed);
+        // Clamp to physical bounds
+        nextVesselSpeed = Math.min(nextVesselSpeed, MaxStructuralSpeed);
+        nextVesselSpeed = Math.max(nextVesselSpeed, CalmWaterMinSpeed);
 
-        // Check for convergence
-        if (Math.abs(nextVesselSpeed_ThroughWater - currentVesselSpeed_ThroughWater) < TOLERANCE) {
-            currentVesselSpeed_ThroughWater = nextVesselSpeed_ThroughWater;
+        if (Math.abs(nextVesselSpeed - currentVesselSpeed) < TOLERANCE) {
+            currentVesselSpeed = nextVesselSpeed;
             break;
         }
-        currentVesselSpeed_ThroughWater = nextVesselSpeed_ThroughWater;
+        currentVesselSpeed = nextVesselSpeed;
     }
 
-    // Final speed over ground
-    let finalVesselSpeed_OverGround = currentVesselSpeed_ThroughWater;
-
-    // Add the component of the current that acts along the intended direction of travel.
+    // === FINAL SPEED OVER GROUND ===
+    const edgeDir = {x: Math.cos(edge_angle), y: Math.sin(edge_angle)};
+    const currentX = current_mag * Math.cos(current_angle);
+    const currentY = current_mag * Math.sin(current_angle);
     const currentAlongEdge = currentX * edgeDir.x + currentY * edgeDir.y;
-    finalVesselSpeed_OverGround += currentAlongEdge;
 
-    // Ensure final speed over ground is never negative or zero for pathfinding purposes
-    if (finalVesselSpeed_OverGround <= 0) return largeValue;
+    let finalSpeedOverGround = currentVesselSpeed + currentAlongEdge;
 
-    // --- Calculate Base Sailing Time ---
-    const sailingTime = length / finalVesselSpeed_OverGround;
+    if (finalSpeedOverGround <= 0) {
+        finalSpeedOverGround = 0.1; // 0.1 m/s minimal drift speed rather than completely stalled
+    }
+
+    const sailingTime = edge_length / finalSpeedOverGround;
     if (timeOnly) return sailingTime;
 
-    // --- Apply Additional Multipliers for Full Cost (not just time) ---
+    // === VISIBILITY AND LIGHT PENALTIES ===
+    const landIsVisible = visibility >= land_sight;
+    const weatherVisibilityPenalty = landIsVisible ? 1 : invisibleLandPenalty;
+    const daylightFraction = Math.max(0, Math.min(daylight, 1));  // Clamp to [0, 1]
+    const darknessPenalty = 1 + (darknessPenaltyFactor - 1) * (1 - daylightFraction);
+    const totalVisibilityPenalty = weatherVisibilityPenalty * darknessPenalty;
 
-    // Visibility and Light Level Penalties
-    const meteorological_visibility = safeValue(te?.visibility_m, largeValue);
-    const topographical_visibility = safeValue(target.clear_land, largeValue);
-    const diurnal_visibility = safeValue(target.daylight_ratio, 1);
+    // === SHORELINE PROXIMITY PENALTY ===
+    const idealLandDistance = 5000;           // Ideal clearance from shore (metres)
+    const maxLandPenaltyMultiplier = 3.0;     // Maximum penalty when directly adjacent to shore
+    let landProximityPenalty = 1;
+    if (land_distance < idealLandDistance) {
+        const proximityFactor = 1 - (land_distance / idealLandDistance);  // 0 near ideal, 1 near shore
+        landProximityPenalty = 1 + (maxLandPenaltyMultiplier - 1) * (proximityFactor ** 2);
+    }
 
-    const landIsVisible = meteorological_visibility >= topographical_visibility;
-    const weatherVisibilityPenalty = landIsVisible ? 1 : vesselParameters.invisibleLandPenalty;
+    // === DEPTH PENALTY (DRAUGHT CONSTRAINT) ===
+    const depthTolerance = 1.1;
+    const draughtPenalty = (bathymetry < (actualDraught * depthTolerance)) ? bathymetricPenalty : 1;
 
-    const light_level_penalty = vesselParameters.darknessPenaltyFactor - (diurnal_visibility * (vesselParameters.darknessPenaltyFactor - 1));
-
-    const totalVisibilityPenalty = weatherVisibilityPenalty * light_level_penalty;
-
-    // --- Linear Land Proximity Time Multiplier ---
-    const D = 5000; // Minimum safe distance to land in metres (e.g., 10 km)
-    const M = 3; // Maximum multiplier at zero distance to land (e.g., 5x time penalty)
-    const epsilon = 0.01;                            // decay threshold
-    const k = -Math.log(epsilon) / D;                // decay constant
-    const d = Math.max(0, topographical_visibility); // clamp to non-negative
-    const landProximityPenaltyFactor = 1 + (M - 1) * Math.exp(-k * d);
-
-    // Bathymetry penalty (target node's depth)
-    const depthTolerance = 1.1; // Require at least 10% more depth than actual draught
-    const bathymetry = safeValue(target.bathymetry, 0);
-    const draughtPenalty = (bathymetry < (actualDraught * depthTolerance)) ? vesselParameters.bathymetricPenalty : 1;
-
-    // Final weighted time (cost) for the pathfinding algorithm
-    return sailingTime * totalVisibilityPenalty * landProximityPenaltyFactor * draughtPenalty;
+    return sailingTime * totalVisibilityPenalty * landProximityPenalty * draughtPenalty;
 }
 
 

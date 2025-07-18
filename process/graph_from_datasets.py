@@ -3,8 +3,10 @@ import json
 import logging
 import math
 import os
+import shutil
 import sqlite3
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
 
 import fiona
 import h3
@@ -684,7 +686,8 @@ def keyset_paged_query(cursor, table, key_columns, batch_size=1000, columns='*',
 
 
 def float_to_sci_str(x, digits=6):
-    if x == 0:
+    # Used to reduce graphology file size by converting floats to scientific notation strings
+    if x == 0 or x is None:
         return "0"
     if isinstance(x, int) and abs(x) < 10**digits:
         return str(x)
@@ -695,35 +698,84 @@ def float_to_sci_str(x, digits=6):
 
 
 def export_graphology_format(msgpack_gzip_path, cursor, batch_size=1000):
-    graph = {
-        "attributes": {},
-        "nodes": [],
-        "edges": []
-    }
+    """
+    Export graph data in an ultra-lean positional array format to reduce file size by
+    eliminating object keys. This format uses nested lists with fixed field order
+    instead of dictionaries.
 
-    # === Export nodes ===
+    Structure of the exported `graph` object (a list of two lists: nodes and edges):
+
+    graph = [
+        nodes,  # list of nodes
+        edges   # list of edges
+    ]
+
+    Nodes:
+        Each node is a list:
+            [
+                key (str),           # Node identifier (h3id)
+                [
+                    lat (str),       # Latitude in scientific notation string
+                    lng (str),       # Longitude in scientific notation string
+                    bathymetry (str),
+                    clear_land (str),
+                    dist_m (str)
+                ]
+            ]
+
+    Edges:
+        Each edge is a list:
+            [
+                key (str),          # Combined source_target string
+                source (str),       # Source node id
+                target (str),       # Target node id
+                [
+                    length_m (float),
+                    dx (str),       # Scientific notation string
+                    dy (str),       # Scientific notation string
+                    angle (float)
+                ],
+                [
+                    visibility_m (list[str]),   # 12 monthly values as sci strings
+                    daylight_ratio (list[int]), # 12 monthly values as integers
+                    forward (list[list]),       # 12 monthly lists of 4 values each:
+                                                # [wind_angle (float), wind_mag (str),
+                                                #  current_angle (float), current_mag (str)]
+                    reverse (list[list])        # Same structure as forward
+                ]
+            ]
+
+    Args:
+        msgpack_gzip_path (str): Output path for the compressed msgpack file.
+        cursor (sqlite3.Cursor): Database cursor for querying graph data.
+        batch_size (int, optional): Number of records to fetch per batch.
+
+    """
+    logger.info("Assembling and exporting graph...")
+    graph = [
+        [],  # nodes list
+        []   # edges list
+    ]
+
+    # Export nodes as [key, [lat, lng, bathymetry, clear_land, dist_m]]
     cursor.execute("SELECT COUNT(*) FROM nodes")
     total_nodes = cursor.fetchone()[0]
 
     with tqdm(total=total_nodes, desc="Nodes") as pbar:
         for batch in keyset_paged_query(cursor, table="nodes", key_columns="h3id", batch_size=batch_size):
             for node in batch:
-                h3id = node["h3id"]
-
-                node_entry = {
-                    "key": h3id,
-                    "attributes": {
-                        "lat": float_to_sci_str(node["lat"]),
-                        "lng": float_to_sci_str(node["lng"]),
-                        "bathymetry": float_to_sci_str(node["bathymetry"]),
-                        "clear_land": float_to_sci_str(node["clear_land"]),
-                        "dist_m": float_to_sci_str(node["dist_m"])
-                    }
-                }
-                graph["nodes"].append(node_entry)
+                node_entry = [
+                    node["h3id"],
+                    [
+                        float_to_sci_str(node["bathymetry"]),
+                        float_to_sci_str(node["clear_land"]),
+                        float_to_sci_str(node["dist_m"])
+                    ]
+                ]
+                graph[0].append(node_entry)
             pbar.update(len(batch))
 
-    # === Export edges ===
+    # Export edges as [key, source, target, [length_m, dx, dy, angle], [visibility_m[], daylight_ratio[], forward[], reverse[]]]
     cursor.execute("SELECT COUNT(*) FROM edges")
     total_edges = cursor.fetchone()[0]
 
@@ -734,20 +786,14 @@ def export_graphology_format(msgpack_gzip_path, cursor, batch_size=1000):
                 source = edge["source_h3id"]
                 target = edge["target_h3id"]
                 cursor.execute(
-                    f"SELECT * FROM edge_monthly WHERE source_h3id = '{source}' AND target_h3id = '{target}' ORDER BY month")
+                    f"SELECT * FROM edge_monthly WHERE source_h3id = '{source}' AND target_h3id = '{target}' ORDER BY month"
+                )
                 months = cursor.fetchall()
-                attrs = {
-                    "length_m": edge["length_m"],
-                    "dx": edge["dx"],
-                    "dy": edge["dy"],
-                    "angle": edge["angle"]
-                }
-
                 month_data = [dict(row) for row in months]
                 month_index = {m["month"]: m for m in month_data}
                 default = {
                     "visibility_m": 0,
-                    "daylight_ratio": 50,  # Default to 50% if not available
+                    "daylight_ratio": 50,
                     "forward_wind_angle": 0,
                     "forward_wind_mag": 0,
                     "forward_current_angle": 0,
@@ -758,41 +804,53 @@ def export_graphology_format(msgpack_gzip_path, cursor, batch_size=1000):
                     "reverse_current_mag": 0,
                 }
 
-                # Fill in missing months
                 complete_months = [
                     {**default, **month_index.get(m, {}), "month": m}
                     for m in range(1, 13)
                 ]
 
-                edge_entry = {
-                    "key": f"{source}_{target}",
-                    "source": source,
-                    "target": target,
-                    "attributes": attrs,
-                    "months": {
-                        "visibility_m": [float_to_sci_str(m["visibility_m"]) for m in complete_months],
-                        "daylight_ratio": [m["daylight_ratio"] for m in complete_months],
-                        "forward": [
-                            {
-                                "wind_angle": m["forward_wind_angle"],
-                                "wind_mag": float_to_sci_str(m["forward_wind_mag"]),
-                                "current_angle": m["forward_current_angle"],
-                                "current_mag": float_to_sci_str(m["forward_current_mag"]),
-                            }
-                            for m in complete_months
-                        ],
-                        "reverse": [
-                            {
-                                "wind_angle": m["reverse_wind_angle"],
-                                "wind_mag": float_to_sci_str(m["reverse_wind_mag"]),
-                                "current_angle": m["reverse_current_angle"],
-                                "current_mag": float_to_sci_str(m["reverse_current_mag"]),
-                            }
-                            for m in complete_months
-                        ]
-                    }
-                }
-                graph["edges"].append(edge_entry)
+                visibility_m = [float_to_sci_str(m["visibility_m"]) for m in complete_months]
+                daylight_ratio = [m["daylight_ratio"] for m in complete_months]
+
+                def reversed_angle(angle):
+                    return (angle + 180) % 360
+
+                # forward and reverse as list of arrays: [wind_angle, wind_mag, current_angle, current_mag]
+                forward = [
+                    [
+                        reversed_angle(m["reverse_wind_angle"]) if m["forward_wind_mag"] == 0 else m["forward_wind_angle"],
+                        float_to_sci_str(m["reverse_wind_mag"]) if m["forward_wind_mag"] == 0 else float_to_sci_str(m["forward_wind_mag"]),
+                        reversed_angle(m["reverse_current_angle"]) if m["forward_current_mag"] == 0 else m["forward_current_angle"],
+                        float_to_sci_str(m["reverse_current_mag"]) if m["forward_current_mag"] == 0 else float_to_sci_str(m["forward_current_mag"]),
+                    ]
+                    for m in complete_months
+                ]
+                reverse = [
+                    [
+                        m["reverse_wind_angle"],
+                        float_to_sci_str(m["reverse_wind_mag"]),
+                        m["reverse_current_angle"],
+                        float_to_sci_str(m["reverse_current_mag"]),
+                    ]
+                    for m in complete_months
+                ]
+
+                edge_entry = [
+                    f"{source}_{target}",
+                    source,
+                    target,
+                    [
+                        edge["length_m"],
+                        edge["angle"]
+                    ],
+                    [
+                        visibility_m,
+                        daylight_ratio,
+                        forward,
+                        reverse
+                    ]
+                ]
+                graph[1].append(edge_entry)
             pbar.update(len(batch))
 
     # === Write compressed MessagePack ===
@@ -801,11 +859,15 @@ def export_graphology_format(msgpack_gzip_path, cursor, batch_size=1000):
     with gzip.open(msgpack_gzip_path, "wb") as f:
         f.write(packed)
 
+    # Copy to the docs directory
+    docs_path = Path(str(msgpack_gzip_path).replace("/docs/", "/app/public/"))
+    shutil.copy2(msgpack_gzip_path, docs_path)
+
     logger.info("✔ Graph export complete.")
-    return len(graph["nodes"]), len(graph["edges"])
+    return len(graph[0]), len(graph[1])
 
 
-def save_metadata(AOI, geo_output_directory):
+def save_metadata(AOI, geo_output_directory, node_count, edge_count):
     lon_min, lat_min, lon_max, lat_max = AOI["bounds"]
     metadata_dict = {
         "name": AOI["name"],
@@ -816,11 +878,17 @@ def save_metadata(AOI, geo_output_directory):
             "north": lat_max
         },
         "h3_resolution": COASTAL_SEA_RESOLUTION,
+        "node_count": node_count,
+        "edge_count": edge_count,
         "sources": datasets
     }
     metadata_file = geo_output_directory / "metadata.json"
     with open(metadata_file, "w") as f:
         json.dump(metadata_dict, f, indent=4)
+
+    docs_path = Path(str(metadata_file).replace("/docs/", "/app/public/"))
+    shutil.copy2(metadata_file, docs_path)
+
     logger.info(f"✅ Saved metadata to {metadata_file}")
 
 
@@ -853,114 +921,114 @@ def main(batch_size=5000):
 
     logger.info("Database initialised successfully.")
 
-    cache_paths = {
-        "bathymetry": str(copernicus_data_directory / "zarr" / "bathymetry.zarr"),
-        "visibility_distance": str(copernicus_data_directory / "zarr" / "visibility_distance.zarr"),
-    }
+    # cache_paths = {
+    #     "bathymetry": str(copernicus_data_directory / "zarr" / "bathymetry.zarr"),
+    #     "visibility_distance": str(copernicus_data_directory / "zarr" / "visibility_distance.zarr"),
+    # }
+    #
+    # with ProcessPoolExecutor(max_workers=max_workers, initializer=worker_init, initargs=(cache_paths,)) as executor:
+    #
+    #     buffer = []
+    #
+    #     def update_from_buffer(buffer):
+    #         node_update_data = []
+    #
+    #         for update_row in buffer:
+    #             node_update_data.append(update_row)
+    #
+    #         conn.executemany(
+    #             """
+    #             UPDATE nodes
+    #             SET bathymetry = ?, clear_land = ?
+    #             WHERE h3id = ?
+    #             """,
+    #             node_update_data
+    #         )
+    #
+    #         conn.commit()
+    #
+    #     with tqdm(total=total_nodes, desc="Processing nodes") as pbar:
+    #         for node_batch in get_batches(c, batch_size, samplelimit=None):
+    #             futures = {
+    #                 executor.submit(process_node, (row["h3id"], row["lat"], row["lng"], row["dist_m"])): row["h3id"]
+    #                 for row in node_batch
+    #             }
+    #
+    #             for future in as_completed(futures):
+    #                 result = future.result()
+    #                 if result is not None:
+    #                     buffer.append(result)
+    #
+    #                 pbar.update(1)
+    #
+    #                 if len(buffer) >= batch_size:
+    #                     update_from_buffer(buffer)
+    #                     buffer.clear()
+    #
+    #         if buffer:
+    #             update_from_buffer(buffer)
+    #             buffer.clear()
+    #
+    # cache_paths = {
+    #     "wind": str(copernicus_data_directory / "wind_hourly_subset.zarr"),
+    #     "current": str(copernicus_data_directory / "current_hourly_subset.zarr"),
+    #     "weather": str(copernicus_data_directory / "zarr" / "weather.zarr"),
+    #     "daylight": str(copernicus_data_directory / "zarr" / "daylight_ratios.zarr"),
+    # }
+    #
+    # with ProcessPoolExecutor(max_workers=max_workers, initializer=worker_init, initargs=(cache_paths,)) as executor:
+    #
+    #     buffer = []
+    #
+    #     def update_from_buffer(buffer):
+    #         edge_monthly_data = []
+    #
+    #         for monthly_rows in buffer:
+    #             edge_monthly_data.extend(monthly_rows)
+    #
+    #         conn.executemany(
+    #             """
+    #             INSERT OR REPLACE INTO edge_monthly (
+    #                 source_h3id, target_h3id, month, visibility_m, daylight_ratio,
+    #                 forward_wind_angle, forward_wind_mag,
+    #                 forward_current_angle, forward_current_mag,
+    #                 reverse_wind_angle, reverse_wind_mag,
+    #                 reverse_current_angle, reverse_current_mag
+    #             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    #             """,
+    #             edge_monthly_data
+    #         )
+    #
+    #         conn.commit()
+    #
+    #     with tqdm(total=total_edges, desc="Processing edges") as pbar:
+    #         for edge_batch in get_batches(c, batch_size, type="edge", samplelimit=None):
+    #             futures = {
+    #                 executor.submit(process_edge, (
+    #                     row["source_h3id"], row["target_h3id"], row["midpoint_lat"], row["midpoint_lng"],
+    #                     row["length_m"],
+    #                     row["dx"], row["dy"], row["angle"])): f"{row["source_h3id"]}-{row["target_h3id"]}"
+    #                 for row in edge_batch
+    #             }
+    #
+    #             for future in as_completed(futures):
+    #                 result = future.result()
+    #                 if result is not None:
+    #                     buffer.append(result)
+    #
+    #                 pbar.update(1)
+    #
+    #                 if len(buffer) >= batch_size:
+    #                     update_from_buffer(buffer)
+    #                     buffer.clear()
+    #
+    #         if buffer:
+    #             update_from_buffer(buffer)
+    #             buffer.clear()
 
-    with ProcessPoolExecutor(max_workers=max_workers, initializer=worker_init, initargs=(cache_paths,)) as executor:
+    node_count, edge_count = export_graphology_format(output_path, c)
 
-        buffer = []
-
-        def update_from_buffer(buffer):
-            node_update_data = []
-
-            for update_row in buffer:
-                node_update_data.append(update_row)
-
-            conn.executemany(
-                """
-                UPDATE nodes
-                SET bathymetry = ?, clear_land = ?
-                WHERE h3id = ?
-                """,
-                node_update_data
-            )
-
-            conn.commit()
-
-        with tqdm(total=total_nodes, desc="Processing nodes") as pbar:
-            for node_batch in get_batches(c, batch_size, samplelimit=None):
-                futures = {
-                    executor.submit(process_node, (row["h3id"], row["lat"], row["lng"], row["dist_m"])): row["h3id"]
-                    for row in node_batch
-                }
-
-                for future in as_completed(futures):
-                    result = future.result()
-                    if result is not None:
-                        buffer.append(result)
-
-                    pbar.update(1)
-
-                    if len(buffer) >= batch_size:
-                        update_from_buffer(buffer)
-                        buffer.clear()
-
-            if buffer:
-                update_from_buffer(buffer)
-                buffer.clear()
-
-    cache_paths = {
-        "wind": str(copernicus_data_directory / "wind_hourly_subset.zarr"),
-        "current": str(copernicus_data_directory / "current_hourly_subset.zarr"),
-        "weather": str(copernicus_data_directory / "zarr" / "weather.zarr"),
-        "daylight": str(copernicus_data_directory / "zarr" / "daylight_ratios.zarr"),
-    }
-
-    with ProcessPoolExecutor(max_workers=max_workers, initializer=worker_init, initargs=(cache_paths,)) as executor:
-
-        buffer = []
-
-        def update_from_buffer(buffer):
-            edge_monthly_data = []
-
-            for monthly_rows in buffer:
-                edge_monthly_data.extend(monthly_rows)
-
-            conn.executemany(
-                """
-                INSERT OR REPLACE INTO edge_monthly (
-                    source_h3id, target_h3id, month, visibility_m, daylight_ratio,
-                    forward_wind_angle, forward_wind_mag,
-                    forward_current_angle, forward_current_mag,
-                    reverse_wind_angle, reverse_wind_mag,
-                    reverse_current_angle, reverse_current_mag
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                edge_monthly_data
-            )
-
-            conn.commit()
-
-        with tqdm(total=total_edges, desc="Processing edges") as pbar:
-            for edge_batch in get_batches(c, batch_size, type="edge", samplelimit=None):
-                futures = {
-                    executor.submit(process_edge, (
-                        row["source_h3id"], row["target_h3id"], row["midpoint_lat"], row["midpoint_lng"],
-                        row["length_m"],
-                        row["dx"], row["dy"], row["angle"])): f"{row["source_h3id"]}-{row["target_h3id"]}"
-                    for row in edge_batch
-                }
-
-                for future in as_completed(futures):
-                    result = future.result()
-                    if result is not None:
-                        buffer.append(result)
-
-                    pbar.update(1)
-
-                    if len(buffer) >= batch_size:
-                        update_from_buffer(buffer)
-                        buffer.clear()
-
-            if buffer:
-                update_from_buffer(buffer)
-                buffer.clear()
-
-    export_graphology_format(output_path, c)
-
-    save_metadata(AOI, geo_output_directory)
+    save_metadata(AOI, geo_output_directory, node_count, edge_count)
 
 
 if __name__ == "__main__":
