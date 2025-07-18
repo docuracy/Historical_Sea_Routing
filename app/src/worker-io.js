@@ -8,7 +8,7 @@ let loadedGraph = null;
 
 function openGraphDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open('GraphCacheDB', 4);
+        const request = indexedDB.open('GraphCacheDB', 5);
 
         request.onupgradeneeded = (event) => {
             const db = request.result;
