@@ -167,7 +167,7 @@ export function estimateSailingTime(payload) {
         f // Flow: wind and current conditions per month
     } = edge;
 
-    if (!f || !f[month-1]) {
+    if (!f || !f[month - 1]) {
         console.warn(`Missing environmental data for edge ${source.id} → ${target.id} in month ${month}`);
         console.debug(`Edge data:`, edge);
     }
@@ -178,10 +178,10 @@ export function estimateSailingTime(payload) {
         wM: wind_mag,        // Wind speed (m/s)
         cA: current_angle,   // Current direction (degrees)
         cM: current_mag      // Current speed (m/s)
-    } = f[month-1];
+    } = f[month - 1];
 
-    const visibility = v[month-1];  // Meteorological visibility (m)
-    const daylight = D[month-1];  // Diurnal visibility factor (percentage)
+    const visibility = v[month - 1];  // Meteorological visibility (m)
+    const daylight = D[month - 1];  // Diurnal visibility factor (percentage)
 
     // Vessel parameters
     const {
@@ -434,6 +434,27 @@ state.vesselPresets = {
         maxAddedWaveResistanceCoeff: 0.12, // High for blunt bows
         maxStructuralSpeed: 4.5, // Relatively slow
         maxDraftTolerance: 0.4,
+    },
+    "galley": {
+        lengthOverall: 40,        // Longer hull than a cog (20 m → 40 m)
+        designDraught: 2.2,       // Shallower draught than a cog (2.5 m → 2.2 m)
+        nominalBurthen: 120,      // Higher cargo capacity (80 tons → 120 tons)
+        hullCoefficient: 0.5,     // Finer hull shape (0.6 → 0.5), better hydrodynamics
+        lightshipMass: 55,        // Heavier build (40 tons → 55 tons)
+
+        sailArea: 220,            // Slightly smaller total sail area (250 m² → 220 m²)
+        sailEfficiencyFactor: 0.75, // More efficient lateen sail (0.6 → 0.75)
+        maxSailEfficiencyAngle: Math.PI / 2, // Peak efficiency on beam reach (180° → 90°)
+        noGoAngle: Math.PI / 3,   // Better upwind ability (72° → 60° no-go angle)
+
+        waveImpactFactor: 0.08,   // Slightly less wave drag than cog (0.1 → 0.08)
+        currentLateralDragFactor: 0.45, // More streamlined hull than cog (0.6 → 0.45)
+        maxAddedWaveResistanceCoeff: 0.07, // More slender bow shape (0.1 → 0.07)
+
+        calmWaterMinSpeed: 0.2,   // Slightly more effective in calm due to oars (0.1 → 0.2)
+        maxStructuralSpeed: 5.5,  // Slightly higher top speed than cog (5 m/s → 5.5 m/s)
+
+        nominalSpeed: 3.5         // Faster typical cruising (3 m/s → 3.5 m/s)
     },
     "knarr": { // Viking merchant vessel, robust for North Atlantic
         lengthOverall: 18,
