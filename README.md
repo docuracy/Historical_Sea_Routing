@@ -193,8 +193,7 @@ where available, and the parameters of the vessel models should be adjusted acco
 
 > 💡 Contributions welcome: If you have access to historical shipping logs, port books, or travel diaries that document
 > journey durations or routes, please consider submitting them (or links to them) via GitHub Issues or Pull Requests.
-> Data
-> from merchant, naval, or fishing vessels dated before 1700 and covering the North Sea, Baltic, English Channel,
+> Data from merchant, naval, or fishing vessels dated before 1700 and covering the North Sea, Baltic, English Channel,
 > Eastern Atlantic, and Mediterranean regions would be particularly valuable.
 
 For example:
@@ -209,6 +208,20 @@ For example:
 
   > Teonge, an English naval chaplain, recorded daily positions, weather, and course during his voyages to the
   Mediterranean and Levant between June 1675 and November 1676, including leg-by-leg progress estimates.
+
+See also:
+
+- Pryor, J.H. (1988) ‘The ships’, in _Geography, Technology, and War: Studies in the Maritime History of the
+  Mediterranean, 649–1571_. Cambridge: Cambridge University Press (Past and Present Publications), pp. 25–86.
+  DOI: https://doi.org/10.1017/CBO9780511562501.006.
+
+  > “Travelling in a cog in 1384, three Tuscan pilgrims took 23 days for the voyage from Venice to Alexandria but 42 for
+  the return to Venice from Beirut. On board a Venetian great galley in 1395, Ogier VIII d’Anglure took 32 days to reach
+  Jaffa but over five months for the return to Venice. The galley on which Felix Fabri travelled in 1480 took 43 days to
+  make Jaffa from Venice but 70 for the return voyage.”
+
+  > “Two spring voyages from Genoa to Alexandria in 1379 and 1391 took 24 days and 35 days respectively, whereas a late
+  autumn voyage from Beirut to Genoa in 1396 took 53 days.”
 
 ## References and Data Sources
 
