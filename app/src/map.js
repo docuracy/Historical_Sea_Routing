@@ -10,6 +10,30 @@ import {worker} from "./main";
 import {clusterPoints, getPortsGeoJSON, initPortsWorker, polygons} from "./map-utils";
 
 const protocol = new pmtiles.Protocol();
+
+
+
+// DEBUG: Intercept tile requests to log them
+const originalTileFunc = protocol.tile.bind(protocol);
+
+protocol.tile = async function(params, callback) {
+  const url = params.url;
+  const coord = params.coord;  // tile coords
+  const signal = params.signal; // abort signal
+
+  console.log(`[PMTiles] Requesting tile: ${url}, coord: ${coord.z}/${coord.x}/${coord.y}`);
+
+  try {
+    const result = await originalTileFunc(params, callback);
+    console.log(`[PMTiles] Tile fetched: ${url}, coord: ${coord.z}/${coord.x}/${coord.y}`, result);
+    return result;
+  } catch (err) {
+    console.error(`[PMTiles] Tile fetch error: ${url}, coord: ${coord.z}/${coord.x}/${coord.y}`, err);
+    throw err;
+  }
+};
+// END
+
 maplibregl.addProtocol('pmtiles', protocol.tile);
 
 const seaColour = '#0b3b53';

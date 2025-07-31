@@ -5,5 +5,16 @@ export default {
   build: {
     outDir: '../docs', // build into the root-level 'docs/' folder
     emptyOutDir: false
+  },
+  server: {
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url.endsWith('.pmtiles')) {
+          res.setHeader('Content-Type', 'application/octet-stream');
+          res.setHeader('Content-Encoding', 'identity'); // Crucial: disable compression
+        }
+        next();
+      });
+    }
   }
 };
