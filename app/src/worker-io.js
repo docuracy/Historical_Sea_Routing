@@ -31,13 +31,21 @@ function openGraphDB() {
 export async function storeGraph(graphId, graph) {
     const {nodes, edges, ...metadata} = graph.export();
     const db = await openGraphDB();
+
+    function storeChunks(store, prefix, items, chunkSize = 5000) {
+        for (let i = 0; i < items.length; i += chunkSize) {
+            const chunk = items.slice(i, i + chunkSize);
+            store.put(chunk, `${prefix}:${i / chunkSize}`);
+        }
+    }
+
     return new Promise((resolve, reject) => {
         const tx = db.transaction('graphs', 'readwrite');
         const store = tx.objectStore('graphs');
 
         try {
-            store.put(nodes, `${graphId}:nodes`);
-            store.put(edges, `${graphId}:edges`);
+            storeChunks(store, `${graphId}:nodes`, nodes);
+            storeChunks(store, `${graphId}:edges`, edges);
             store.put(metadata, `${graphId}:metadata`);
         } catch (e) {
             return reject(e);
@@ -51,25 +59,49 @@ export async function storeGraph(graphId, graph) {
 
 async function loadCachedGraph(graphId) {
     const db = await openGraphDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction('graphs', 'readonly');
-        const store = tx.objectStore('graphs');
+    const tx = db.transaction('graphs', 'readonly');
+    const store = tx.objectStore('graphs');
 
-        const parts = {};
-        let loaded = 0;
-        const keys = ['nodes', 'edges', 'metadata'];
+    function loadChunks(store, prefix) {
+        return new Promise((resolve, reject) => {
+            const result = [];
+            const range = IDBKeyRange.bound(`${prefix}:0`, `${prefix}:\uffff`);
+            const request = store.openCursor(range);
 
-        keys.forEach((key) => {
-            const req = store.get(`${graphId}:${key}`);
-            req.onsuccess = () => {
-                parts[key] = req.result;
-                if (++loaded === keys.length) {
-                    resolve({type: 'split', data: parts});
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    const chunkIndex = parseInt(cursor.key.split(':').pop(), 10);
+                    result[chunkIndex] = cursor.value;
+                    cursor.continue();
+                } else {
+                    resolve(result.flat());
                 }
             };
-            req.onerror = () => reject(req.error);
+
+            request.onerror = () => reject(request.error);
         });
-    });
+    }
+
+    try {
+        const [nodes, edges, metadata] = await Promise.all([
+            loadChunks(store, `${graphId}:nodes`),
+            loadChunks(store, `${graphId}:edges`),
+            new Promise((resolve, reject) => {
+                const req = store.get(`${graphId}:metadata`);
+                req.onsuccess = () => resolve(req.result || {});
+                req.onerror = () => reject(req.error);
+            })
+        ]);
+
+        return {
+            type: 'split',
+            data: {nodes, edges, metadata}
+        };
+    } catch (e) {
+        console.error(`Failed to load graph chunks for ${graphId}:`, e);
+        return null;
+    }
 }
 
 
