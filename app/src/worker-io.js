@@ -8,7 +8,7 @@ let loadedGraph = null;
 
 function openGraphDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open('GraphCacheDB', 5);
+        const request = indexedDB.open('GraphCacheDB', 6);
 
         request.onupgradeneeded = (event) => {
             const db = request.result;
@@ -29,15 +29,19 @@ function openGraphDB() {
 
 
 export async function storeGraph(graphId, graph) {
-    const finalGraphObject = graph.export();
+    const {nodes, edges, ...metadata} = graph.export();
     const db = await openGraphDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction('graphs', 'readwrite');
         const store = tx.objectStore('graphs');
 
-        const req = store.put(finalGraphObject, graphId);
-
-        req.onerror = () => reject(req.error);
+        try {
+            store.put(nodes, `${graphId}:nodes`);
+            store.put(edges, `${graphId}:edges`);
+            store.put(metadata, `${graphId}:metadata`);
+        } catch (e) {
+            return reject(e);
+        }
 
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
@@ -51,20 +55,20 @@ async function loadCachedGraph(graphId) {
         const tx = db.transaction('graphs', 'readonly');
         const store = tx.objectStore('graphs');
 
-        const req = store.get(graphId);
+        const parts = {};
+        let loaded = 0;
+        const keys = ['nodes', 'edges', 'metadata'];
 
-        req.onsuccess = () => {
-            if (req.result) {
-                resolve({type: 'object', data: req.result});
-            } else {
-                resolve(null);
-            }
-        };
-
-        req.onerror = () => {
-            console.warn(`[Cache] Failed to load graph object for ${graphId} from IndexedDB:`, req.error);
-            reject(req.error);
-        }
+        keys.forEach((key) => {
+            const req = store.get(`${graphId}:${key}`);
+            req.onsuccess = () => {
+                parts[key] = req.result;
+                if (++loaded === keys.length) {
+                    resolve({type: 'split', data: parts});
+                }
+            };
+            req.onerror = () => reject(req.error);
+        });
     });
 }
 
@@ -205,7 +209,7 @@ function addReverseEdges(graph) {
 
     for (let i = 0; i < originalEdges.length; i++) {
         const edge = originalEdges[i];
-        const { source, target, attributes, months } = edge;
+        const {source, target, attributes, months} = edge;
         const length = attributes.L;
         const angle = attributes.a;
 
@@ -248,10 +252,17 @@ export async function loadAOIGraph(payload) {
         const graphId = `routing_graph_${aoi}`;
         const cached = await loadCachedGraph(graphId);
 
-        if (cached?.type === 'object') {
+        if (cached?.type === 'object' || cached?.type === 'split') {
+            const graphData = cached.type === 'object' ? cached.data : {
+                nodes: cached.data.nodes,
+                edges: cached.data.edges,
+                attributes: cached.data.metadata?.attributes || {},
+                options: cached.data.metadata?.options || {},
+            };
+
             const {DirectedGraph} = graphology;
-            loadedGraph = DirectedGraph.from(cached.data);
-            console.log(`[Cache] Loaded graph object for ${graphId} from IndexedDB.`);
+            loadedGraph = DirectedGraph.from(graphData);
+            console.log(`[Cache] Loaded graph ${cached.type} for ${graphId} from IndexedDB.`);
         } else {
             console.log(`[Cache] No cached graph object found for ${graphId}. Fetching from network...`);
             const basePath = import.meta.env.BASE_URL;
