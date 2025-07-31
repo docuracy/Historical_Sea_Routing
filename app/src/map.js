@@ -17,18 +17,27 @@ const protocol = new pmtiles.Protocol();
 const originalTileFunc = protocol.tile.bind(protocol);
 
 protocol.tile = async function(params, callback) {
-  const url = params.url;
-  const coord = params.coord;  // tile coords
-  const signal = params.signal; // abort signal
-
-  console.log(`[PMTiles] Requesting tile: ${url}, coord: ${coord.z}/${coord.x}/${coord.y}`);
+  const coord = params?.coord;
+  if (coord) {
+    console.log(`[PMTiles] Requesting tile: z=${coord.z}, x=${coord.x}, y=${coord.y}`);
+  } else {
+    console.log('[PMTiles] Requesting tile without coord param', params);
+  }
 
   try {
     const result = await originalTileFunc(params, callback);
-    console.log(`[PMTiles] Tile fetched: ${url}, coord: ${coord.z}/${coord.x}/${coord.y}`, result);
+    if (coord) {
+      console.log(`[PMTiles] Tile fetched: z=${coord.z}, x=${coord.x}, y=${coord.y}`);
+    } else {
+      console.log('[PMTiles] Tile fetched (no coord)', params);
+    }
     return result;
   } catch (err) {
-    console.error(`[PMTiles] Tile fetch error: ${url}, coord: ${coord.z}/${coord.x}/${coord.y}`, err);
+    if (coord) {
+      console.error(`[PMTiles] Tile fetch error: z=${coord.z}, x=${coord.x}, y=${coord.y}`, err);
+    } else {
+      console.error('[PMTiles] Tile fetch error (no coord)', err);
+    }
     throw err;
   }
 };
