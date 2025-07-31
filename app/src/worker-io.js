@@ -252,8 +252,8 @@ export async function loadAOIGraph(payload) {
         const graphId = `routing_graph_${aoi}`;
         const cached = await loadCachedGraph(graphId);
 
-        if (cached?.type === 'object' || cached?.type === 'split') {
-            const graphData = cached.type === 'object' ? cached.data : {
+        if (cached?.type === 'split') {
+            const graphData = {
                 nodes: cached.data.nodes,
                 edges: cached.data.edges,
                 attributes: cached.data.metadata?.attributes || {},
