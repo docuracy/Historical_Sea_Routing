@@ -58,9 +58,9 @@ const style = {
     sources: {
         coastlines: {
             type: 'vector',
-              tiles: [
-                  'https://raw.githubusercontent.com/docuracy/Historical_Sea_Routing/main/osm-coastlines-mvtiles/{z}/{x}/{y}.mvt',
-              ],
+            tiles: [
+                'https://cdn.jsdelivr.net/gh/docuracy/Historical_Sea_Routing@main/osm-coastlines-mvtiles/{z}/{x}/{y}.mvt',
+            ],
         },
     },
     layers: [
@@ -69,6 +69,16 @@ const style = {
             type: 'background',
             paint: {
                 'background-color': seaColour,
+            }
+        },
+        {
+            id: 'coastlines-outline',
+            type: 'line',
+            source: 'coastlines',
+            'source-layer': 'coastlines',
+            paint: {
+                'line-color': '#ff0000',
+                'line-width': 1
             }
         },
         {
@@ -87,8 +97,8 @@ const style = {
 export function initMap() {
     state.map = new maplibregl.Map({
         container: 'map',
-        // style: 'https://tiles.whgazetteer.org/styles/whg-basic-light/style.json',
-        style: style,
+        style: 'https://tiles.whgazetteer.org/styles/whg-basic-light/style.json',
+        // style: style,
         zoom: 6,
         attributionControl: {
             customAttribution: 'Map Tiles: <a target="_blank" href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
