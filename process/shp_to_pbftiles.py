@@ -5,7 +5,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-minZoom = 8
+minZoom = 0
 maxZoom = 10
 
 # Paths
