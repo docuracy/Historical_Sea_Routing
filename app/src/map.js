@@ -9,7 +9,7 @@ import {stopMonthCycle, updateRouteLegLogs} from "./quarterdeck";
 import {worker} from "./main";
 import {clusterPoints, getPortsGeoJSON, initPortsWorker, polygons} from "./map-utils";
 
-const seaColour = '#c1dbea';
+// const seaColour = '#c1dbea';
 
 // const protocol = new pmtiles.Protocol();
 //
@@ -45,8 +45,8 @@ const seaColour = '#c1dbea';
 //
 // maplibregl.addProtocol('pmtiles', protocol.tile);
 
-// const seaColour = '#0b3b53';
-// const landColour = '#849552';
+const seaColour = '#0b3b53';
+const landColour = '#849552';
 //
 // const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, ''); // remove trailing slash
 // const sourceUrlZ8 = `pmtiles://${baseUrl}/data/osm-coastlines-z8.pmtiles`;
@@ -59,7 +59,7 @@ const style = {
         coastlines: {
             type: 'vector',
               tiles: [
-                  'https://cdn.jsdelivr.net/gh/docuracy/Historical_Sea_Routing@main/app/public/data/osm-coastlines-pbftiles/{z}/{x}/{y}.pbf',
+                  'https://raw.githubusercontent.com/docuracy/Historical_Sea_Routing/main/osm-coastlines-mvtiles/{z}/{x}/{y}.mvt',
               ],
         },
     },
