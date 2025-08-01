@@ -1,9 +1,12 @@
+import concurrent.futures
 import gzip
 import subprocess
 from pathlib import Path
 
-minZoom = 0
-maxZoom = 7
+from tqdm import tqdm
+
+minZoom = 8
+maxZoom = 10
 
 # Paths
 shapefile = Path("./data/osm_land_4326_unsplit/land_polygons.shp")
@@ -52,14 +55,13 @@ except subprocess.CalledProcessError as e:
 
 print("Renaming .pbf files to .mvt and decompressing if gzipped...")
 
+
 def decompress_if_gzipped(file_path: Path):
     """Check if file is gzipped and decompress in-place if yes."""
     try:
         with open(file_path, 'rb') as f:
             magic = f.read(2)
         if magic == b'\x1f\x8b':  # gzip magic bytes
-            print(f"Decompressing gzipped file: {file_path}")
-            # Read gzip content and overwrite file with decompressed data
             with gzip.open(file_path, 'rb') as gz:
                 decompressed_data = gz.read()
             with open(file_path, 'wb') as f:
@@ -69,13 +71,29 @@ def decompress_if_gzipped(file_path: Path):
     except Exception as e:
         print(f"Error decompressing {file_path}: {e}")
 
-# Rename .pbf → .mvt and decompress
-for pbf_file in pbftiles.rglob("*.pbf"):
-    mvt_file = pbf_file.with_suffix(".mvt")
-    try:
-        pbf_file.rename(mvt_file)
-        decompress_if_gzipped(mvt_file)
-    except Exception as e:
-        print(f"Failed to rename or decompress {pbf_file}: {e}")
 
-print("✅ Done.")
+# Rename .pbf → .mvt in zoom range
+for z in range(minZoom, maxZoom + 1):
+    zoom_dir = pbftiles / str(z)
+    if not zoom_dir.exists():
+        continue
+    for pbf_file in zoom_dir.rglob("*.pbf"):
+        mvt_file = pbf_file.with_suffix(".mvt")
+        try:
+            pbf_file.rename(mvt_file)
+        except Exception as e:
+            print(f"❌ Failed to rename {pbf_file}: {e}")
+
+# Collect .mvt files in range
+mvt_files = []
+for z in range(minZoom, maxZoom + 1):
+    zoom_dir = pbftiles / str(z)
+    if zoom_dir.exists():
+        mvt_files.extend(zoom_dir.rglob("*.mvt"))
+
+print(f"Decompressing {len(mvt_files)} .mvt files in parallel...")
+
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    list(tqdm(executor.map(decompress_if_gzipped, mvt_files), total=len(mvt_files)))
+
+print("✅ Done decompressing.")

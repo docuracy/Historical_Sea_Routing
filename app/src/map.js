@@ -44,8 +44,8 @@ import {clusterPoints, getPortsGeoJSON, initPortsWorker, polygons} from "./map-u
 //
 // maplibregl.addProtocol('pmtiles', protocol.tile);
 
-const seaColour = '#c1dbea'; // WHG Sea colour
-// const seaColour = '#0b3b53';
+// const seaColour = '#c1dbea'; // WHG Sea colour
+const seaColour = '#0b3b53';
 const landColour = '#849552';
 //
 // const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, ''); // remove trailing slash
@@ -53,52 +53,50 @@ const landColour = '#849552';
 // const sourceUrlZ9 = `pmtiles://${baseUrl}/data/osm-coastlines-z9.pmtiles`;
 
 const style = {
-    version: 8,
-    glyphs: `${import.meta.env.BASE_URL}fonts/{fontstack}/{range}.pbf`,
-    sources: {
-        coastlines: {
-            type: 'vector',
-            tiles: [
-                'https://cdn.jsdelivr.net/gh/docuracy/Historical_Sea_Routing@main/osm-coastlines-mvtiles/{z}/{x}/{y}.mvt',
-            ],
-        },
+  version: 8,
+  glyphs: `${import.meta.env.BASE_URL}fonts/{fontstack}/{range}.pbf`,
+  metadata: {
+    'mapbox:type': 'default',
+    'mapbox:autocomposite': false,
+  },
+  sources: {
+    coastlines: {
+      type: 'vector',
+      tiles: [
+        'https://raw.githubusercontent.com/docuracy/Historical_Sea_Routing/main/osm-countries-tiles/{z}/{x}/{y}.mvt',
+      ],
+      minzoom: 0,
+      maxzoom: 10,
+      tileSize: 512,
     },
-    layers: [
-        {
-            id: 'sea-background',
-            type: 'background',
-            paint: {
-                'background-color': seaColour,
-            }
-        },
-        {
-            id: 'coastlines-outline',
-            type: 'line',
-            source: 'coastlines',
-            'source-layer': 'coastlines',
-            paint: {
-                'line-color': '#ff0000',
-                'line-width': 1
-            }
-        },
-        {
-            id: 'coastlines',
-            type: 'fill',
-            source: 'coastlines',
-            'source-layer': 'coastlines',
-            paint: {
-                'fill-color': landColour,
-                'fill-opacity': 0.7
-            }
-        },
-    ]
+  },
+  layers: [
+    {
+      id: 'sea-background',
+      type: 'background',
+      paint: {
+        'background-color': seaColour,
+      }
+    },
+    {
+      id: 'land-polygons',
+      type: 'fill',
+      source: 'coastlines',
+      'source-layer': 'coastlines',
+      paint: {
+        'fill-color': landColour,
+        'fill-opacity': 1
+      }
+    },
+  ]
 };
+
 
 export function initMap() {
     state.map = new maplibregl.Map({
         container: 'map',
-        style: 'https://tiles.whgazetteer.org/styles/whg-basic-light/style.json',
-        // style: style,
+        // style: 'https://tiles.whgazetteer.org/styles/whg-basic-light/style.json',
+        style: style,
         zoom: 6,
         attributionControl: {
             customAttribution: 'Map Tiles: <a target="_blank" href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
