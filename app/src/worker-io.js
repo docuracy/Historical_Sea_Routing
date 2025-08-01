@@ -75,6 +75,7 @@ async function loadCachedGraph(graphId) {
                     result[chunkIndex] = cursor.value;
                     cursor.continue();
                 } else {
+                    console.debug(`Loaded ${result.length} chunks for ${prefix}`);
                     resolve(result.flat());
                 }
             };

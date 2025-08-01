@@ -52,62 +52,43 @@ const seaColour = '#c1dbea';
 // const sourceUrlZ8 = `pmtiles://${baseUrl}/data/osm-coastlines-z8.pmtiles`;
 // const sourceUrlZ9 = `pmtiles://${baseUrl}/data/osm-coastlines-z9.pmtiles`;
 
-// const style = {
-//     version: 8,
-//     glyphs: `${import.meta.env.BASE_URL}fonts/{fontstack}/{range}.pbf`,
-//     sources: {
-//         coastlinesZ8: {
-//             type: 'vector',
-//             url: sourceUrlZ8,
-//             promoteId: 'id',
-//             maxzoom: 9
-//         },
-//         coastlinesZ9: {
-//             type: 'vector',
-//             url: sourceUrlZ9,
-//             promoteId: 'id',
-//             minzoom: 9,
-//         },
-//     },
-//     layers: [
-//         {
-//             id: 'sea-background',
-//             type: 'background',
-//             paint: {
-//                 'background-color': seaColour,
-//             }
-//         },
-//         {
-//             id: 'coastlines-low',
-//             type: 'fill',
-//             source: 'coastlinesZ8',
-//             'source-layer': 'coastlines',
-//             minzoom: 0,
-//             maxzoom: 9,
-//             paint: {
-//                 'fill-color': landColour,
-//                 'fill-opacity': 0.7
-//             }
-//         },
-//         {
-//             id: 'coastlines-medium',
-//             type: 'fill',
-//             source: 'coastlinesZ9',
-//             'source-layer': 'coastlines',
-//             minzoom: 9,
-//             paint: {
-//                 'fill-color': landColour,
-//                 'fill-opacity': 0.7
-//             }
-//         },
-//     ]
-// };
+const style = {
+    version: 8,
+    glyphs: `${import.meta.env.BASE_URL}fonts/{fontstack}/{range}.pbf`,
+    sources: {
+        coastlines: {
+            type: 'vector',
+              tiles: [
+                  'https://cdn.jsdelivr.net/gh/docuracy/Historical_Sea_Routing@main/app/public/data/osm-coastlines-pbftiles/{z}/{x}/{y}.pbf',
+              ],
+        },
+    },
+    layers: [
+        {
+            id: 'sea-background',
+            type: 'background',
+            paint: {
+                'background-color': seaColour,
+            }
+        },
+        {
+            id: 'coastlines',
+            type: 'fill',
+            source: 'coastlines',
+            'source-layer': 'coastlines',
+            paint: {
+                'fill-color': landColour,
+                'fill-opacity': 0.7
+            }
+        },
+    ]
+};
 
 export function initMap() {
     state.map = new maplibregl.Map({
         container: 'map',
-        style: 'https://tiles.whgazetteer.org/styles/whg-basic-light/style.json',
-        // style: style,
+        // style: 'https://tiles.whgazetteer.org/styles/whg-basic-light/style.json',
+        style: style,
         zoom: 6,
         attributionControl: {
             customAttribution: 'Map Tiles: <a target="_blank" href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
