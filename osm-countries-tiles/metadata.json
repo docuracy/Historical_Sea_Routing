@@ -2,15 +2,15 @@
 "name": "../osm-countries-tiles",
 "description": "../osm-countries-tiles",
 "version": "2",
-"minzoom": "0",
-"maxzoom": "7",
-"center": "-74.531250,-51.609618,7",
+"minzoom": "8",
+"maxzoom": "10",
+"center": "-75.761719,37.300145,10",
 "bounds": "-180.000000,-85.051129,180.000000,83.665113",
 "antimeridian_adjusted_bounds": "-180.000000,-85.051129,179.999941,83.665113",
 "type": "overlay",
-"strategies": "[{\"tiny_polygons\":800258},{\"tiny_polygons\":821873},{\"tiny_polygons\":840522},{\"tiny_polygons\":837392},{\"tiny_polygons\":826149},{\"tiny_polygons\":789412},{\"tiny_polygons\":739632},{\"tiny_polygons\":641338}]",
+"strategies": "[{},{},{},{},{},{},{},{},{\"tiny_polygons\":497881},{\"tiny_polygons\":319170},{\"tiny_polygons\":181079}]",
 "format": "pbf",
 "generator": "tippecanoe v2.72.0",
-"generator_options": "/home/stephen/PycharmProjects/Historical_Sea_Routing/.venv/lib/python3.12/site-packages/tippecanoe/bin/tippecanoe -l coastlines -Z 0 -z 7 --output-to-directory ../osm-countries-tiles --drop-densest-as-needed --coalesce-densest-as-needed --extend-zooms-if-still-dropping --simplify-only-low-zooms '--projection=EPSG:4326' --force data/osm_land_4326_unsplit/land_polygons.geojsonseq",
-"json": "{\"vector_layers\":[{\"id\":\"coastlines\",\"description\":\"\",\"minzoom\":0,\"maxzoom\":7,\"fields\":{\"FID\":\"Number\"}}],\"tilestats\":{\"layerCount\":1,\"layers\":[{\"layer\":\"coastlines\",\"count\":801486,\"geometry\":\"Polygon\",\"attributeCount\":1,\"attributes\":[{\"attribute\":\"FID\",\"count\":1000,\"type\":\"number\",\"values\":[0,1,10,100,1000,10000,100000,100001,100002,100003,100004,100005,100006,100007,100008,100009,10001,100010,100011,100012,100013,100014,100015,100016,100017,100018,100019,10002,100020,100021,100022,100023,100024,100025,100026,100027,100028,100029,10003,100030,100031,100032,100033,100034,100035,100036,100037,100038,100039,10004,100040,100041,100042,100043,100044,100045,100046,100047,100048,100049,10005,100050,100051,100052,100053,100054,100055,100056,100057,100058,100059,10006,100060,100061,100062,100063,100064,100065,100066,100067,100068,100069,10007,100070,100071,100072,100073,100074,100075,100076,100077,100078,100079,10008,100080,100081,100082,100083,100084,100085],\"min\":0,\"max\":801485}]}]}}"
+"generator_options": "/home/stephen/PycharmProjects/Historical_Sea_Routing/.venv/lib/python3.12/site-packages/tippecanoe/bin/tippecanoe -l coastlines -Z 8 -z 10 --output-to-directory ../osm-countries-tiles --drop-densest-as-needed --coalesce-densest-as-needed --extend-zooms-if-still-dropping --simplify-only-low-zooms '--projection=EPSG:4326' --force data/osm_land_4326_unsplit/land_polygons.geojsonseq",
+"json": "{\"vector_layers\":[{\"id\":\"coastlines\",\"description\":\"\",\"minzoom\":8,\"maxzoom\":10,\"fields\":{\"FID\":\"Number\"}}],\"tilestats\":{\"layerCount\":1,\"layers\":[{\"layer\":\"coastlines\",\"count\":801486,\"geometry\":\"Polygon\",\"attributeCount\":1,\"attributes\":[{\"attribute\":\"FID\",\"count\":1000,\"type\":\"number\",\"values\":[0,1,10,100,1000,10000,100000,100001,100002,100003,100004,100005,100006,100007,100008,100009,10001,100010,100011,100012,100013,100014,100015,100016,100017,100018,100019,10002,100020,100021,100022,100023,100024,100025,100026,100027,100028,100029,10003,100030,100031,100032,100033,100034,100035,100036,100037,100038,100039,10004,100040,100041,100042,100043,100044,100045,100046,100047,100048,100049,10005,100050,100051,100052,100053,100054,100055,100056,100057,100058,100059,10006,100060,100061,100062,100063,100064,100065,100066,100067,100068,100069,10007,100070,100071,100072,100073,100074,100075,100076,100077,100078,100079,10008,100080,100081,100082,100083,100084,100085],\"min\":0,\"max\":801485}]}]}}"
 }
