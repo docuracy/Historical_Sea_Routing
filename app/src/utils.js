@@ -70,6 +70,7 @@ function showInstructions(onProceed) {
     const message = `
         <div id="instructions">
             This tool estimates plausible historical sailing routes at different times of year for a variety of square-rigged vessel types.<br><br>
+            <em>Initial loading time can be 10 seconds or fewer on Chrome and Edge browsers, but is noticeably longer on Firefox.</em><br><br>
             <b>NOTE:</b> Please read the <a href="https://github.com/docuracy/Historical_Sea_Routing?tab=readme-ov-file#erutter-historical-sea-routing" target="_blank">documentation</a> for an explanation of calibration and limitations of the software. <br>
             <button id="proceed" style="margin-top: 0.5em;">OK</button>
             <button id="dismiss-instructions" style="margin-top: 0.5em;">Don't show this again</button>
