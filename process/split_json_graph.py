@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-def main(json_size_limit: int = 50_000_000):
+def main(json_size_limit: int = 10_000_000):
     AOI = AOIS[0]  # Use Europe bounding box
     bbox = list(AOI["bounds"])
     logger.info(f"Using AOI: {AOI['name']} with bounds {bbox}")
