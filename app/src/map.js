@@ -8,7 +8,7 @@ import {stopMonthCycle, updateRouteLegLogs} from "./quarterdeck";
 import {worker} from "./main";
 import {clusterPoints, getPortsGeoJSON, initPortsWorker, polygons} from "./map-utils";
 
-const seaColour = '#0b3b53';
+const seaColour = '#1d5777';
 const landColour = '#849552';
 
 const style = {
@@ -27,6 +27,17 @@ const style = {
             minzoom: 0,
             maxzoom: 10,
             tileSize: 512,
+            attribution: 'Land: <a target="_blank" href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
+        },
+        'viabundus_water': {
+            type: 'vector',
+            tiles: [
+                'https://raw.githubusercontent.com/docuracy/Historical_Sea_Routing/main/viabundus-water-tiles/{z}/{x}/{y}.mvt',
+            ],
+            minzoom: 0,
+            maxzoom: 10,
+            tileSize: 512,
+            attribution: 'Water c.1500: Holterman/<a target="_blank" href="https://www.landesgeschichte.uni-goettingen.de/handelsstrassen/info.php">Viabundus</a>',
         },
         'graph_source': {
             type: 'vector',
@@ -55,6 +66,16 @@ const style = {
                 'fill-color': landColour,
                 'fill-opacity': 1
             }
+        },
+        {
+            id: 'viabundus-water',
+            type: 'fill',
+            source: 'viabundus_water',
+            'source-layer': 'viabundus_water',
+            paint: {
+                'fill-color': seaColour,
+                'fill-opacity': 1
+            },
         },
         {
             id: 'graph-hexes',
@@ -90,7 +111,6 @@ export function initMap() {
         style: style,
         zoom: 6,
         attributionControl: {
-            customAttribution: 'Map Tiles: <a target="_blank" href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
             compact: true
         },
         center: [state.metadata.bounds.west + (state.metadata.bounds.east - state.metadata.bounds.west) / 2,
@@ -110,14 +130,6 @@ export function initMap() {
         state.map.fitBounds([[west, south], [east, north]], {
             padding: {top: 20, bottom: 20, left: state.isMobileDevice ? 20 : state.pane.element.offsetWidth, right: 20},
         });
-
-        await polygons(
-            './data/Viabundus-2-water-1500.geojson',
-            state.map,
-            'viabundus-water',
-            'Water c.1500: Holterman/<a target="_blank" href="https://www.landesgeschichte.uni-goettingen.de/handelsstrassen/info.php">Viabundus</a>',
-            seaColour,
-        );
 
         (async function loadAndClusterPorts() {
             try {
