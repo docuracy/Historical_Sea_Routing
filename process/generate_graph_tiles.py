@@ -71,10 +71,8 @@ try:
         "--projection=EPSG:4326",
         "--force",
         # Input files with layer names assigned:
-        "-l", "hexes",
-        str(hexes_seq),
-        "-l", "edges",
-        str(edges_seq),
+        "-L", f"hexes:{str(hexes_seq)}",
+        "-L", f"edges:{str(edges_seq)}",
     ], check=True)
 except subprocess.CalledProcessError as e:
     print("❌ Failed to generate pbftiles:", e)

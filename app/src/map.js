@@ -22,7 +22,7 @@ const style = {
         coastlines: {
             type: 'vector',
             tiles: [
-                'https://raw.githubusercontent.com/docuracy/Historical_Sea_Routing/main/app/public/data/Europe/osm-countries-tiles/{z}/{x}/{y}.mvt',
+                'https://raw.githubusercontent.com/docuracy/Historical_Sea_Routing/main/osm-countries-tiles/{z}/{x}/{y}.mvt',
             ],
             minzoom: 0,
             maxzoom: 10,
@@ -31,7 +31,7 @@ const style = {
         'graph_source': {
             type: 'vector',
             tiles: [
-                'https://raw.githubusercontent.com/docuracy/Historical_Sea_Routing/main/graph-tiles/{z}/{x}/{y}.mvt',
+                'https://raw.githubusercontent.com/docuracy/Historical_Sea_Routing/main/app/public/data/Europe/graph_tiles/{z}/{x}/{y}.mvt',
             ],
             minzoom: 0,
             maxzoom: 9,
@@ -56,17 +56,17 @@ const style = {
                 'fill-opacity': 1
             }
         },
-        {
-            id: 'graph-hexes',
-            type: 'line',
-            source: 'graph_source',
-            'source-layer': 'hexes',
-            paint: {
-                'line-color': '#FF0000',
-                'line-width': 1,
-                'line-opacity': 0.5
-            }
-        },
+        // {
+        //     id: 'graph-hexes',
+        //     type: 'line',
+        //     source: 'graph_source',
+        //     'source-layer': 'hexes',
+        //     paint: {
+        //         'line-color': '#FF0000',
+        //         'line-width': 1,
+        //         'line-opacity': 0.5
+        //     }
+        // },
         {
             id: 'graph-edges',
             type: 'line',
