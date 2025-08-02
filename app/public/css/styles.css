@@ -210,10 +210,12 @@ body > #logo {
     display: table;
 }
 
-#dismiss-instructions {
+#instructions button {
     margin-top: 0.5em;
     border-radius: 4px;
     padding: 3px;
     float: right;
     background: #e3dcd8;
+    cursor: pointer;
+    margin-left: 1em;
 }

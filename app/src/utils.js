@@ -5,13 +5,21 @@ import {stopMonthCycle} from "./quarterdeck";
 import {state} from "./state";
 import {handleFindClosestNode} from "./map";
 import {handleComputeRoute} from "./router";
-import {worker} from "./main";
 import {runStarfield} from "starfield-webgl";
 
 
 (() => {
     runStarfield({});
 })();
+
+let graphLoadResult = null;
+let userProceeded = false;
+
+function tryProceed() {
+    if (graphLoadResult && userProceeded) {
+        proceedWithSuccess(graphLoadResult);
+    }
+}
 
 
 export function initWorker() {
@@ -36,6 +44,19 @@ export function initWorker() {
         }
     };
 
+    // Show instructions now if needed
+    const shouldShowInstructions = localStorage.getItem("hideInstructions") !== "true";
+
+    if (shouldShowInstructions) {
+        showInstructions(() => {
+            userProceeded = true;
+            tryProceed();
+        });
+    } else {
+        userProceeded = true;
+    }
+
+    // Trigger graph loading regardless
     worker.postMessage({
         type: 'load-graph',
         payload: {aoi: state.aoi}
@@ -45,31 +66,47 @@ export function initWorker() {
 }
 
 
+function showInstructions(onProceed) {
+    const message = `
+        <div id="instructions">
+            This tool estimates plausible historical sailing routes at different times of year for a variety of square-rigged vessel types.<br><br>
+            <b>NOTE:</b> Please read the <a href="https://github.com/docuracy/Historical_Sea_Routing?tab=readme-ov-file#erutter-historical-sea-routing" target="_blank">documentation</a> for an explanation of calibration and limitations of the software. <br>
+            <button id="proceed" style="margin-top: 0.5em;">OK</button>
+            <button id="dismiss-instructions" style="margin-top: 0.5em;">Don't show this again</button>
+        </div>
+    `;
+
+    updateSpinnerText(message, true);
+
+    // Delay wiring up buttons until DOM is ready
+    requestAnimationFrame(() => {
+        const instructionsDiv = document.getElementById("instructions");
+        const proceedBtn = document.getElementById("proceed");
+        const dismissBtn = document.getElementById("dismiss-instructions");
+
+        proceedBtn?.addEventListener("click", () => {
+            instructionsDiv?.remove();
+            onProceed();
+        });
+
+        dismissBtn?.addEventListener("click", () => {
+            localStorage.setItem("hideInstructions", "true");
+            instructionsDiv?.remove();
+            onProceed();
+        });
+    });
+}
+
+
 function handleLoadGraph(success, error, result) {
     if (!success) {
         console.error(result, error);
+        updateSpinnerText("Failed to load graph. Please check the console for details.");
         return;
     }
 
-    // If instructions should be shown and haven't been dismissed yet
-    const shouldShowInstructions = localStorage.getItem("hideInstructions") !== "true";
-
-    if (shouldShowInstructions) {
-        // Show the spinner message with instructions and defer execution
-        updateSpinnerText("Loading completed.", true);
-
-        // Wait for the user to click the dismiss button before proceeding
-        const dismissBtn = document.getElementById("dismiss-instructions");
-        if (dismissBtn) {
-            dismissBtn.addEventListener("click", () => {
-                localStorage.setItem("hideInstructions", "true");
-                proceedWithSuccess(result);
-            });
-        }
-    } else {
-        // Proceed immediately if instructions are already hidden
-        proceedWithSuccess(result);
-    }
+    graphLoadResult = result;
+    tryProceed();
 }
 
 
@@ -83,29 +120,18 @@ function proceedWithSuccess(result) {
 }
 
 
-export function updateSpinnerText(message, includeInstructions = false) {
-    if (localStorage.getItem("hideInstructions") === "true") {
-        includeInstructions = false;
-    }
+export function updateSpinnerText(message, append = false) {
     const text = document.getElementById("spinner-text");
     const logoHTML = document.getElementById("logo")?.outerHTML || '';
-    if (text && logoHTML) {
-        message = `${logoHTML}</br>${message}`;
+
+    if (text) {
+        if (append) {
+            text.innerHTML += `<br>${message}`;
+        } else {
+            text.innerHTML = `${logoHTML}<br>${message}`;
+        }
     }
 
-    // Append instructions box if needed
-    if (includeInstructions) {
-        const instructionsHTML = `
-            <div id="instructions">
-                This tool estimates plausible historical sailing routes based on vessel type and environmental conditions.<br><br>
-                <b>NOTE:</b> The journey time estimates are as yet <i>very</i> inaccurate and should not be relied upon or quoted!<br>
-                <button id="dismiss-instructions" style="margin-top: 0.5em;">Don't show this again</button>
-            </div>
-        `;
-        message += instructionsHTML;
-    }
-
-    if (text) text.innerHTML = message;
 }
 
 export function showSpinner(message = "Loading…") {
@@ -203,7 +229,8 @@ export async function loadMetadata(defaultAOI = "Europe") {
     state.metadata = await res.json();
     state.isMobileDevice = isMobileDevice();
 
-    updateSpinnerText(`Loading ${state.metadata.node_count.toLocaleString()} nodes for <i>${state.aoi}</i>...`, true);
+    let edges_and_nodes = state.metadata.edge_count * 2 + state.metadata.node_count;
+    updateSpinnerText(`Loading ${edges_and_nodes.toLocaleString()} nodes & edges for <i>${state.aoi}</i>...`);
 }
 
 
