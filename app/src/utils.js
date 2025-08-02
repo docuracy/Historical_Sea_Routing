@@ -27,12 +27,6 @@ export function initWorker() {
 
         if (type === 'load-graph') {
             handleLoadGraph(success, error, result);
-        } else if (type === 'store-graph') {
-            if (success) {
-                console.info(`Graph stored successfully.`);
-            } else {
-                console.error(`Failed to store graph: ${error}`);
-            }
         } else if (type === 'find-closest-node') {
             handleFindClosestNode(success, error, result);
         } else if (type === 'compute-route') {
@@ -84,16 +78,6 @@ function proceedWithSuccess(result) {
     document.getElementById('map')?.classList.add('visible');
     document.getElementById('pane-container')?.classList.add('visible');
     state.graph = result.graphStats;
-
-    if (result.doStore) {
-        worker.postMessage({
-            type: 'store-graph',
-            payload: {
-                graphId: `routing_graph_${state.aoi}`,
-            }
-        });
-    }
-
     console.info(result.message);
     console.info(`Graph has ${result.graphStats.nodeCount} nodes and ${result.graphStats.edgeCount} edges.`);
 }

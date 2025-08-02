@@ -1,0 +1,6 @@
+{
+  "nodes_chunks": 1,
+  "edges_chunks": 9,
+  "max_chunk_size_kb": 48828.1,
+  "file_format": "json"
+}

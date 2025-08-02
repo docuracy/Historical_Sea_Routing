@@ -1,110 +1,8 @@
 // worker-io.js - Used exclusively in the graph worker to load and cache AOI graphs from IndexedDB or network.
 
-import pako from 'pako';
-import msgpack from "msgpack-lite";
 import graphology from "graphology";
 
 let loadedGraph = null;
-
-function openGraphDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open('GraphCacheDB', 6);
-
-        request.onupgradeneeded = (event) => {
-            const db = request.result;
-
-            if (!db.objectStoreNames.contains('graphs')) {
-                db.createObjectStore('graphs');
-            } else {
-                const tx = event.target.transaction;
-                const store = tx.objectStore('graphs');
-                store.clear();  // wipe all cached graph data
-            }
-        };
-
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-    });
-}
-
-
-export async function storeGraph(graphId, graph) {
-    const {nodes, edges, ...metadata} = graph.export();
-    const db = await openGraphDB();
-
-    function storeChunks(store, prefix, items, chunkSize = 5000) {
-        for (let i = 0; i < items.length; i += chunkSize) {
-            const chunk = items.slice(i, i + chunkSize);
-            store.put(chunk, `${prefix}:${i / chunkSize}`);
-        }
-    }
-
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction('graphs', 'readwrite');
-        const store = tx.objectStore('graphs');
-
-        try {
-            storeChunks(store, `${graphId}:nodes`, nodes);
-            storeChunks(store, `${graphId}:edges`, edges);
-            store.put(metadata, `${graphId}:metadata`);
-        } catch (e) {
-            return reject(e);
-        }
-
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-        tx.onabort = () => reject(tx.error);
-    });
-}
-
-async function loadCachedGraph(graphId) {
-    const db = await openGraphDB();
-    const tx = db.transaction('graphs', 'readonly');
-    const store = tx.objectStore('graphs');
-
-    function loadChunks(store, prefix) {
-        return new Promise((resolve, reject) => {
-            const result = [];
-            const range = IDBKeyRange.bound(`${prefix}:0`, `${prefix}:\uffff`);
-            const request = store.openCursor(range);
-
-            request.onsuccess = (event) => {
-                const cursor = event.target.result;
-                if (cursor) {
-                    const chunkIndex = parseInt(cursor.key.split(':').pop(), 10);
-                    result[chunkIndex] = cursor.value;
-                    cursor.continue();
-                } else {
-                    console.debug(`Loaded ${result.length} chunks for ${prefix}`);
-                    resolve(result.flat());
-                }
-            };
-
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    try {
-        const [nodes, edges, metadata] = await Promise.all([
-            loadChunks(store, `${graphId}:nodes`),
-            loadChunks(store, `${graphId}:edges`),
-            new Promise((resolve, reject) => {
-                const req = store.get(`${graphId}:metadata`);
-                req.onsuccess = () => resolve(req.result || {});
-                req.onerror = () => reject(req.error);
-            })
-        ]);
-
-        return {
-            type: 'split',
-            data: {nodes, edges, metadata}
-        };
-    } catch (e) {
-        console.error(`Failed to load graph chunks for ${graphId}:`, e);
-        return null;
-    }
-}
-
 
 /**
  * Reconstructs the keyed graph structure from positional arrays with minimal keys.
@@ -276,82 +174,57 @@ function addReverseEdges(graph) {
     graph.edges = newEdges;
 }
 
+async function fetchJSON(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status} ${res.statusText}`);
+    return res.json();
+}
+
+// Fetch all chunks given a base URL and count, returning the concatenated array
+async function fetchChunks(baseUrl, count) {
+    const chunks = [];
+
+    for (let i = 0; i < count; i++) {
+        const chunkUrl = `${baseUrl}-${i}.json`;
+        const chunkData = await fetchJSON(chunkUrl);
+
+        for (let j = 0; j < chunkData.length; j++) {
+            chunks.push(chunkData[j]);
+        }
+    }
+    return chunks;
+}
+
 
 export async function loadAOIGraph(payload) {
     const {aoi} = payload;
     const totalStart = performance.now();
-    let doStore = false;
+
     try {
-        const graphId = `routing_graph_${aoi}`;
-        const cached = await loadCachedGraph(graphId);
+        const basePath = import.meta.env.BASE_URL;
+        const manifestUrl = `${basePath}/data/${aoi}/graph_manifest.json`;
 
-        if (
-            cached?.type === 'split' &&
-            Array.isArray(cached.data?.nodes) &&
-            cached.data.nodes.length > 0 &&
-            Array.isArray(cached.data?.edges) &&
-            cached.data.edges.length > 0
-        ) {
-            const graphData = {
-                nodes: cached.data.nodes,
-                edges: cached.data.edges,
-                attributes: cached.data.metadata?.attributes || {},
-                options: cached.data.metadata?.options || {},
-            };
+        // 1. Fetch manifest giving chunk counts for nodes and edges
+        const manifest = await fetchJSON(manifestUrl);
 
-            const {DirectedGraph} = graphology;
-            loadedGraph = DirectedGraph.from(graphData);
-            console.log(`[Cache] Loaded graph ${cached.type} for ${graphId} from IndexedDB.`);
-        } else {
-            console.log(`[Cache] No cached graph object found for ${graphId}. Fetching from network...`);
-            const basePath = import.meta.env.BASE_URL;
-            const graphFile = `${basePath}/data/${aoi}/routing_graph.msgpack.gz`; // http://localhost:5173/data/Europe/routing_graph.msgpack.gz
+        // 2. Fetch nodes and edges chunks in sequence
+        const nodes = await fetchChunks(`${basePath}/data/${aoi}/routing_graph_parts/nodes`, manifest.nodes_chunks);
+        const edges = await fetchChunks(`${basePath}/data/${aoi}/routing_graph_parts/edges`, manifest.edges_chunks);
 
-            const response = await fetch(graphFile);
-            if (!response.ok) {
-                console.error(`Failed to fetch graph file: ${response.status} ${response.statusText}`);
-                return {
-                    success: false,
-                    error: new Error(`Failed to fetch graph file: ${response.status} ${response.statusText}`),
-                    result: {
-                        message: `❌ Failed to fetch graph file: ${response.status} ${response.statusText}`,
-                        totalTime: (performance.now() - totalStart).toFixed(2),
-                    }
-                };
-            }
+        // 3. Fetch metadata
+        const metadata = await fetchJSON(`${basePath}/data/${aoi}/metadata.json`);
 
-            let dataToDecode = new Uint8Array(await response.arrayBuffer());
+        // 4. Reconstruct graph object
+        let graphObject = reconstructGraph([nodes, edges]);
+        graphObject.metadata = metadata;
 
-            // Depending on server context, files may be delivered pre-decompressed.
-            const hasGzipMagicBytes = dataToDecode.length >= 2 && dataToDecode[0] === 0x1F && dataToDecode[1] === 0x8B;
-            if (hasGzipMagicBytes) {
-                try {
-                    dataToDecode = pako.ungzip(dataToDecode);
-                    console.debug('Decompressed graph data using pako');
-                } catch (e) {
-                    throw new Error(e); // Re-throw to halt process
-                }
-            }
+        // 5. Convert strings to numbers and add reverse edges
+        numberiseGraph(graphObject);
+        addReverseEdges(graphObject);
 
-            let graphObject;
-            try {
-                graphObject = msgpack.decode(dataToDecode);
-                console.debug('Decoded graph object')
-            } catch (e) {
-                throw new Error(e);
-            }
-
-            graphObject = reconstructGraph(graphObject);
-            numberiseGraph(graphObject);
-            addReverseEdges(graphObject);
-
-            console.debug(graphObject);
-
-            const {DirectedGraph} = graphology;
-            loadedGraph = DirectedGraph.from(graphObject);
-
-            doStore = true;
-        }
+        // 6. Build graphology graph
+        const {DirectedGraph} = graphology;
+        loadedGraph = DirectedGraph.from(graphObject);
 
         return {
             success: true,
@@ -362,12 +235,9 @@ export async function loadAOIGraph(payload) {
                     nodeCount: loadedGraph.order,
                     edgeCount: loadedGraph.size,
                 },
-                doStore: doStore,
-            }
+            },
         };
-
     } catch (e) {
-        // Consolidated error return path
         console.error(`❌ Failed to load graph for AOI "${aoi}":`, e);
         return {
             success: false,
@@ -375,7 +245,7 @@ export async function loadAOIGraph(payload) {
             result: {
                 message: `❌ Failed to load graph for AOI "${aoi}": ${e.message}`,
                 totalTime: (performance.now() - totalStart).toFixed(2),
-            }
+            },
         };
     }
 }

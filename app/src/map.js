@@ -1,7 +1,6 @@
 // map.js
 
 import maplibregl from 'maplibre-gl';
-// import * as pmtiles from 'pmtiles';
 import {state} from "./state";
 import {h3ToLngLat, showToast} from "./utils";
 import {computeRoutes} from "./router";
@@ -9,48 +8,8 @@ import {stopMonthCycle, updateRouteLegLogs} from "./quarterdeck";
 import {worker} from "./main";
 import {clusterPoints, getPortsGeoJSON, initPortsWorker, polygons} from "./map-utils";
 
-
-// const protocol = new pmtiles.Protocol();
-//
-// // DEBUG: Intercept tile requests to log them
-// const originalTileFunc = protocol.tile.bind(protocol);
-//
-// protocol.tile = async function(params, callback) {
-//   const coord = params?.coord;
-//   if (coord) {
-//     console.log(`[PMTiles] Requesting tile: z=${coord.z}, x=${coord.x}, y=${coord.y}`);
-//   } else {
-//     console.log('[PMTiles] Requesting tile without coord param', params);
-//   }
-//
-//   try {
-//     const result = await originalTileFunc(params, callback);
-//     if (coord) {
-//       console.log(`[PMTiles] Tile fetched: z=${coord.z}, x=${coord.x}, y=${coord.y}`);
-//     } else {
-//       console.log('[PMTiles] Tile fetched (no coord)', params);
-//     }
-//     return result;
-//   } catch (err) {
-//     if (coord) {
-//       console.error(`[PMTiles] Tile fetch error: z=${coord.z}, x=${coord.x}, y=${coord.y}`, err);
-//     } else {
-//       console.error('[PMTiles] Tile fetch error (no coord)', err);
-//     }
-//     throw err;
-//   }
-// };
-// // END
-//
-// maplibregl.addProtocol('pmtiles', protocol.tile);
-
-// const seaColour = '#c1dbea'; // WHG Sea colour
 const seaColour = '#0b3b53';
 const landColour = '#849552';
-//
-// const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, ''); // remove trailing slash
-// const sourceUrlZ8 = `pmtiles://${baseUrl}/data/osm-coastlines-z8.pmtiles`;
-// const sourceUrlZ9 = `pmtiles://${baseUrl}/data/osm-coastlines-z9.pmtiles`;
 
 const style = {
   version: 8,
@@ -95,7 +54,6 @@ const style = {
 export function initMap() {
     state.map = new maplibregl.Map({
         container: 'map',
-        // style: 'https://tiles.whgazetteer.org/styles/whg-basic-light/style.json',
         style: style,
         zoom: 6,
         attributionControl: {
