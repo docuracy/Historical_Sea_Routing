@@ -182,17 +182,9 @@ async function fetchJSON(url) {
 
 // Fetch all chunks given a base URL and count, returning the concatenated array
 async function fetchChunks(baseUrl, count) {
-    const chunks = [];
-
-    for (let i = 0; i < count; i++) {
-        const chunkUrl = `${baseUrl}-${i}.json`;
-        const chunkData = await fetchJSON(chunkUrl);
-
-        for (let j = 0; j < chunkData.length; j++) {
-            chunks.push(chunkData[j]);
-        }
-    }
-    return chunks;
+    const urls = Array.from({ length: count }, (_, i) => `${baseUrl}-${i}.json`);
+    const chunkArrays = await Promise.all(urls.map(fetchJSON));
+    return chunkArrays.flat();
 }
 
 

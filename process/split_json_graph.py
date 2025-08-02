@@ -11,6 +11,12 @@ logger = logging.getLogger(__name__)
 
 
 def main(json_size_limit: int = 10_000_000):
+    """
+    Split a routing graph into size-limited JSON chunks.
+    Chunks are loaded in parallel in the browser: there is a trade-off between
+    the number of chunks and the size of each chunk.
+    For example: 50MB -> 20.6 seconds, 10MB -> 27.2 seconds
+    """
     AOI = AOIS[0]  # Use Europe bounding box
     bbox = list(AOI["bounds"])
     logger.info(f"Using AOI: {AOI['name']} with bounds {bbox}")
