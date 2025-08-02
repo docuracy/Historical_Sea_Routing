@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from process.config import AOIS, head_directory
 
-minZoom = 0
+minZoom = 5
 maxZoom = 9
 
 AOI = AOIS[0]

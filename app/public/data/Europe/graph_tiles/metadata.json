@@ -2,7 +2,7 @@
 "name": "/home/stephen/PycharmProjects/Historical_Sea_Routing/app/public/data/Europe/graph_tiles",
 "description": "/home/stephen/PycharmProjects/Historical_Sea_Routing/app/public/data/Europe/graph_tiles",
 "version": "2",
-"minzoom": "0",
+"minzoom": "5",
 "maxzoom": "9",
 "center": "14.414063,44.839751,9",
 "bounds": "-51.288437,18.672653,39.783292,73.996675",

@@ -56,27 +56,29 @@ const style = {
                 'fill-opacity': 1
             }
         },
-        // {
-        //     id: 'graph-hexes',
-        //     type: 'line',
-        //     source: 'graph_source',
-        //     'source-layer': 'hexes',
-        //     paint: {
-        //         'line-color': '#FF0000',
-        //         'line-width': 1,
-        //         'line-opacity': 0.5
-        //     }
-        // },
+        {
+            id: 'graph-hexes',
+            type: 'line',
+            source: 'graph_source',
+            'source-layer': 'hexes',
+            paint: {
+                'line-color': '#333',
+                'line-width': 1,
+                'line-opacity': 0.5
+            },
+            minzoom: 5,
+        },
         {
             id: 'graph-edges',
             type: 'line',
             source: 'graph_source',
             'source-layer': 'edges',
             paint: {
-                'line-color': '#00FF00',
+                'line-color': '#F00',
                 'line-width': 1,
-                'line-opacity': 0.5
-            }
+                'line-opacity': 0.3
+            },
+            minzoom: 5,
         }
     ]
 };

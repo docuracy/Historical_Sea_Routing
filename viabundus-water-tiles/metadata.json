@@ -1,0 +1,16 @@
+{
+"name": "../viabundus-water-tiles",
+"description": "../viabundus-water-tiles",
+"version": "2",
+"minzoom": "0",
+"maxzoom": "10",
+"center": "30.058594,61.185511,10",
+"bounds": "2.041647,49.950516,32.961768,61.785467",
+"antimeridian_adjusted_bounds": "2.041647,49.950516,32.961768,61.785467",
+"type": "overlay",
+"strategies": "[{\"tiny_polygons\":3514},{\"tiny_polygons\":3471},{\"tiny_polygons\":3363},{\"tiny_polygons\":3115},{\"tiny_polygons\":3062},{\"tiny_polygons\":2009},{\"tiny_polygons\":950},{\"tiny_polygons\":276},{\"tiny_polygons\":111},{\"tiny_polygons\":56},{\"tiny_polygons\":18}]",
+"format": "pbf",
+"generator": "tippecanoe v2.72.0",
+"generator_options": "/home/stephen/PycharmProjects/Historical_Sea_Routing/.venv/lib/python3.12/site-packages/tippecanoe/bin/tippecanoe -l viabundus_water -Z 0 -z 10 --output-to-directory ../viabundus-water-tiles --drop-densest-as-needed --coalesce-densest-as-needed --extend-zooms-if-still-dropping --simplify-only-low-zooms '--projection=EPSG:4326' --force /home/stephen/PycharmProjects/Historical_Sea_Routing/app/public/data/Viabundus-2-water-1500.geojson",
+"json": "{\"vector_layers\":[{\"id\":\"viabundus_water\",\"description\":\"\",\"minzoom\":0,\"maxzoom\":10,\"fields\":{}}],\"tilestats\":{\"layerCount\":1,\"layers\":[{\"layer\":\"viabundus_water\",\"count\":3542,\"geometry\":\"Polygon\",\"attributeCount\":0,\"attributes\":[]}]}}"
+}
