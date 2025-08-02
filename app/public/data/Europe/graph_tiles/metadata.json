@@ -1,0 +1,16 @@
+{
+"name": "/home/stephen/PycharmProjects/Historical_Sea_Routing/app/public/data/Europe/graph_tiles",
+"description": "/home/stephen/PycharmProjects/Historical_Sea_Routing/app/public/data/Europe/graph_tiles",
+"version": "2",
+"minzoom": "0",
+"maxzoom": "9",
+"center": "14.414063,44.839751,9",
+"bounds": "-51.288437,18.672653,39.783292,73.996675",
+"antimeridian_adjusted_bounds": "-51.288437,18.672653,39.783292,73.996675",
+"type": "overlay",
+"strategies": "[{\"dropped_as_needed\":427340,\"tiny_polygons\":167347,\"feature_count_desired\":283947},{\"dropped_as_needed\":477052,\"tiny_polygons\":171591,\"tile_size_desired\":522885,\"feature_count_desired\":322232},{\"dropped_as_needed\":575543,\"tiny_polygons\":88162,\"tile_size_desired\":660925,\"feature_count_desired\":362291},{\"dropped_as_needed\":593576,\"tiny_polygons\":211,\"tile_size_desired\":682793,\"feature_count_desired\":260924},{\"dropped_as_needed\":456431,\"tiny_polygons\":195,\"tile_size_desired\":510095},{\"tiny_polygons\":214},{\"tiny_polygons\":223},{\"tiny_polygons\":223},{\"tiny_polygons\":252},{\"tiny_polygons\":225}]",
+"format": "pbf",
+"generator": "tippecanoe v2.72.0",
+"generator_options": "/home/stephen/PycharmProjects/Historical_Sea_Routing/.venv/lib/python3.12/site-packages/tippecanoe/bin/tippecanoe -Z 0 -z 9 --output-to-directory /home/stephen/PycharmProjects/Historical_Sea_Routing/app/public/data/Europe/graph_tiles --drop-densest-as-needed --coalesce-densest-as-needed --extend-zooms-if-still-dropping --simplify-only-low-zooms '--projection=EPSG:4326' --force -l hexes /home/stephen/PycharmProjects/Historical_Sea_Routing/app/public/data/Europe/graph_tiles/hexes.geojsonseq -l edges /home/stephen/PycharmProjects/Historical_Sea_Routing/app/public/data/Europe/graph_tiles/edges.geojsonseq",
+"json": "{\"vector_layers\":[{\"id\":\"edges\",\"description\":\"\",\"minzoom\":0,\"maxzoom\":9,\"fields\":{}}],\"tilestats\":{\"layerCount\":1,\"layers\":[{\"layer\":\"edges\",\"count\":777969,\"geometry\":\"LineString\",\"attributeCount\":0,\"attributes\":[]}]}}"
+}

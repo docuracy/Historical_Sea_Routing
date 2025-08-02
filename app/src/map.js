@@ -12,42 +12,73 @@ const seaColour = '#0b3b53';
 const landColour = '#849552';
 
 const style = {
-  version: 8,
-  glyphs: `${import.meta.env.BASE_URL}fonts/{fontstack}/{range}.pbf`,
-  metadata: {
-    'mapbox:type': 'default',
-    'mapbox:autocomposite': false,
-  },
-  sources: {
-    coastlines: {
-      type: 'vector',
-      tiles: [
-        'https://raw.githubusercontent.com/docuracy/Historical_Sea_Routing/main/osm-countries-tiles/{z}/{x}/{y}.mvt',
-      ],
-      minzoom: 0,
-      maxzoom: 10,
-      tileSize: 512,
+    version: 8,
+    glyphs: `${import.meta.env.BASE_URL}fonts/{fontstack}/{range}.pbf`,
+    metadata: {
+        'mapbox:type': 'default',
+        'mapbox:autocomposite': false,
     },
-  },
-  layers: [
-    {
-      id: 'sea-background',
-      type: 'background',
-      paint: {
-        'background-color': seaColour,
-      }
+    sources: {
+        coastlines: {
+            type: 'vector',
+            tiles: [
+                'https://raw.githubusercontent.com/docuracy/Historical_Sea_Routing/main/app/public/data/Europe/osm-countries-tiles/{z}/{x}/{y}.mvt',
+            ],
+            minzoom: 0,
+            maxzoom: 10,
+            tileSize: 512,
+        },
+        'graph_source': {
+            type: 'vector',
+            tiles: [
+                'https://raw.githubusercontent.com/docuracy/Historical_Sea_Routing/main/graph-tiles/{z}/{x}/{y}.mvt',
+            ],
+            minzoom: 0,
+            maxzoom: 9,
+            tileSize: 512,
+        }
     },
-    {
-      id: 'land-polygons',
-      type: 'fill',
-      source: 'coastlines',
-      'source-layer': 'coastlines',
-      paint: {
-        'fill-color': landColour,
-        'fill-opacity': 1
-      }
-    },
-  ]
+    layers: [
+        {
+            id: 'sea-background',
+            type: 'background',
+            paint: {
+                'background-color': seaColour,
+            }
+        },
+        {
+            id: 'land-polygons',
+            type: 'fill',
+            source: 'coastlines',
+            'source-layer': 'coastlines',
+            paint: {
+                'fill-color': landColour,
+                'fill-opacity': 1
+            }
+        },
+        {
+            id: 'graph-hexes',
+            type: 'line',
+            source: 'graph_source',
+            'source-layer': 'hexes',
+            paint: {
+                'line-color': '#FF0000',
+                'line-width': 1,
+                'line-opacity': 0.5
+            }
+        },
+        {
+            id: 'graph-edges',
+            type: 'line',
+            source: 'graph_source',
+            'source-layer': 'edges',
+            paint: {
+                'line-color': '#00FF00',
+                'line-width': 1,
+                'line-opacity': 0.5
+            }
+        }
+    ]
 };
 
 
