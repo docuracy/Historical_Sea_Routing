@@ -358,7 +358,7 @@ def stats(geom, centroid, hex_diameter_m, get_closest=False):
     if intersects and get_closest:
         overlapping = False
         for candidate in land_tree.query(geom):
-            key = wkb_dumps(candidate, hex=True)
+            key = wkb_dumps(land_geoms[candidate], hex=True)
             idx = land_geom_index_map.get(key)
             if idx is not None:
                 if prepared_land[idx].overlaps(geom):
@@ -522,7 +522,7 @@ def get_zoned_hex_graph(resolution=None):
 
         logger.info(f"Expanded to {len(cells)} hexes with neighbours.")
 
-    tqdm.pandas(desc=f"Computing stats for r{hex_resolution} hexes")
+    tqdm.pandas()
     while cells and hex_resolution < COASTAL_SEA_RESOLUTION:  # Different treatment for coastal sea
 
         if resolution is not None and hex_resolution != resolution:
@@ -537,12 +537,13 @@ def get_zoned_hex_graph(resolution=None):
 
         hexes_gdf = cells_to_gdf(cells)
 
+        desc = f"Computing stats for r{hex_resolution} hexes"
         results = list(hexes_gdf.progress_apply(
             lambda row: stats(
                 row.geometry, row.centroid,
                 hex_diameter_m=h3.average_hexagon_edge_length(hex_resolution, unit='m') * bandwidth_multiplier,
                 get_closest=hex_resolution <= COASTAL_LAND_DEM_RESOLUTION
-            ), axis=1
+            ), axis=1, desc=desc
         ))
         results_df = pd.DataFrame(results, columns=['sea_only', 'dist_m', 'closest_m'], index=hexes_gdf.index)
         hexes_gdf = pd.concat([hexes_gdf, results_df], axis=1)
@@ -707,9 +708,9 @@ def get_edges():
 def main():
     """Main function to run the sea zone and graph generation process."""
     get_land()
-    # get_zoned_hex_graph()  # Add 5 for debugging
-    # trim_to_aoi()
-    # draw_pickled_cells()
+    get_zoned_hex_graph()  # Add 5 for debugging
+    trim_to_aoi()
+    draw_pickled_cells()
     get_edges()
 
 

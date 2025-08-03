@@ -23,7 +23,7 @@ from process.sea_graph import COASTAL_SEA_RESOLUTION
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-AOI = AOIS[1]
+AOI = AOIS[0]
 
 docs_directory = Path(__file__).resolve().parent.parent / "docs"
 geo_output_directory = docs_directory / "data" / AOI["name"]

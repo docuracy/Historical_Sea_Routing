@@ -10,6 +10,11 @@ screenshots_directory = head_directory / "screenshots"
 # Define areas of interest (AOIs) with their geographical bounds
 AOIS = [
     {
+        "name": "Europe-r8",
+        # lon_min (east coast of Greenland), lat_min (Canarias), lon_max (eastern Mediterranean), lat_max (north coast of Norway)
+        "bounds": (-45.00, 25.00, 37.00, 72.00),  # lon_min, lat_min, lon_max, lat_max
+    },
+    {
         "name": "Europe",
         # lon_min (east coast of Greenland), lat_min (Canarias), lon_max (eastern Mediterranean), lat_max (north coast of Norway)
         "bounds": (-45.00, 25.00, 37.00, 72.00),  # lon_min, lat_min, lon_max, lat_max
@@ -21,7 +26,7 @@ AOIS = [
 ]
 
 # Define H3 resolution for land-adjacent zones
-COASTAL_SEA_RESOLUTION = 7
+COASTAL_SEA_RESOLUTION = 8
 
 # Define datasets
 datasets = {
