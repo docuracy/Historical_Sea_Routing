@@ -1,6 +1,6 @@
 ## Fetch Environment Data
 
-_Not yet Documented_
+_Not yet documented_
 
 ## Create Blended-Resolution Hex Graph
 
@@ -10,4 +10,10 @@ _Not yet Documented_
 
 ## Build Enriched Graph
 
-- Set the required AOI index in `process/build_graph.py` (for example, `AOI = AOIS[0]`), and then run the script.
+- Set the required AOI index in `process/graph_from_datasets.py`, and then run the script.
+- Unpacking the generated `routing_graph.msgpack.gz` takes too long in Firefox browsers, so split the graph into chunks for faster parallel loading and so as to be small enough to store on GitHub: set the required AOI index in `process/split_json_graph.py`, and then run the script.
+
+## Generate Map Tiles
+
+- Set the required AOI index in `process/generate_graph_tiles.py`, and then run the script.
+
